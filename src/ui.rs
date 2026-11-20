@@ -1,0 +1,794 @@
+use std::cell::{Cell, RefCell};
+use std::collections::HashSet;
+use std::time::{Duration, Instant};
+
+use block2::RcBlock;
+use global_hotkey::hotkey::{Code, HotKey, Modifiers};
+use global_hotkey::{GlobalHotKeyEvent, GlobalHotKeyManager, HotKeyState};
+use objc2::rc::Retained;
+use objc2::runtime::{NSObjectProtocol, ProtocolObject};
+use objc2::{AnyThread, DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send};
+use objc2_app_kit::{
+    NSApplication, NSApplicationActivationOptions, NSApplicationActivationPolicy,
+    NSBackingStoreType, NSControlTextEditingDelegate, NSEvent, NSEventMask, NSImage, NSImageView,
+    NSPasteboard, NSPasteboardTypeFileURL, NSPasteboardTypePNG, NSPasteboardTypeString,
+    NSPasteboardTypeTIFF, NSRunningApplication, NSScreen, NSScrollView, NSSearchField,
+    NSTableColumn, NSTableView, NSTableViewDataSource, NSTableViewDelegate, NSTextField,
+    NSTextView, NSView, NSWindow, NSWindowStyleMask, NSWorkspace,
+};
+use objc2_foundation::NSURL;
+use objc2_foundation::{
+    NSIndexSet, NSInteger, NSPoint, NSRect, NSSize, NSString, NSTimer, ns_string,
+};
+use objc2_quick_look_ui::{QLPreviewView, QLPreviewViewStyle};
+
+use crate::paste;
+use crate::store::{self, Hit, Store};
+
+struct Ivars {
+    store: RefCell<Store>,
+    rows: RefCell<Vec<Hit>>,
+    recent: RefCell<Vec<Hit>>,
+    query: RefCell<String>,
+    search: RefCell<Option<Retained<NSSearchField>>>,
+    table: RefCell<Option<Retained<NSTableView>>>,
+    text: RefCell<Option<Retained<NSTextView>>>,
+    image: RefCell<Option<Retained<NSImageView>>>,
+    document: RefCell<Option<Retained<QLPreviewView>>>,
+    preview_kind: Cell<u8>,
+    meta: RefCell<Option<Retained<NSTextField>>>,
+    list_scroll: RefCell<Option<Retained<NSScrollView>>>,
+    text_scroll: RefCell<Option<Retained<NSScrollView>>>,
+    last_change: Cell<isize>,
+    ignore_change: Cell<isize>,
+    prev_pid: Cell<i32>,
+    previewing: Cell<bool>,
+    ocr: crate::ocr::Worker,
+    ocr_pending: RefCell<HashSet<String>>,
+    ocr_scan_at: Cell<Instant>,
+}
+
+define_class!(
+    #[unsafe(super(NSWindow))]
+    #[thread_kind = MainThreadOnly]
+    #[ivars = Ivars]
+    struct ClipPanel;
+
+    unsafe impl NSObjectProtocol for ClipPanel {}
+    unsafe impl NSControlTextEditingDelegate for ClipPanel {}
+
+    unsafe impl NSTableViewDataSource for ClipPanel {
+        #[unsafe(method(numberOfRowsInTableView:))]
+        fn number_of_rows(&self, _: &NSTableView) -> NSInteger {
+            self.ivars().rows.borrow().len() as NSInteger
+        }
+    }
+
+    unsafe impl NSTableViewDelegate for ClipPanel {
+        #[unsafe(method_id(tableView:viewForTableColumn:row:))]
+        fn view_for(
+            &self,
+            _: &NSTableView,
+            _: Option<&NSTableColumn>,
+            row: NSInteger,
+        ) -> Option<Retained<NSView>> {
+            let title = self
+                .ivars()
+                .rows
+                .borrow()
+                .get(row as usize)
+                .map(|h| {
+                    let kind = match h.kind.as_str() {
+                        "image" => "img",
+                        "file" => "file",
+                        "link" => "link",
+                        _ => "text",
+                    };
+                    format!("{kind}   {}", h.title.replace('\n', " "))
+                })
+                .unwrap_or_default();
+            let label = NSTextField::labelWithString(&NSString::from_str(&title), self.mtm());
+            label.setLineBreakMode(objc2_app_kit::NSLineBreakMode::ByTruncatingTail);
+            Some(unsafe { Retained::cast_unchecked(label) })
+        }
+
+        #[unsafe(method(tableViewSelectionDidChange:))]
+        fn selection_changed(&self, _: &objc2_foundation::NSNotification) {
+            self.show_selected();
+        }
+    }
+
+    impl ClipPanel {
+        #[unsafe(method(tick:))]
+        fn tick(&self, _: &NSTimer) {
+            self.poll_hotkey();
+            self.poll_pasteboard();
+            self.poll_query();
+            self.poll_ocr();
+        }
+
+        #[unsafe(method(pasteNow:))]
+        fn paste_now(&self, _: &NSTimer) {
+            paste::post_paste();
+        }
+    }
+);
+
+impl ClipPanel {
+    fn mtm(&self) -> MainThreadMarker {
+        MainThreadMarker::new().expect("main thread")
+    }
+
+    fn new(mtm: MainThreadMarker, store: Store) -> Retained<Self> {
+        let recent = store.recent(200);
+        let rows = recent.clone();
+        let frame = NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(920.0, 560.0));
+        let style = NSWindowStyleMask::Titled
+            | NSWindowStyleMask::Closable
+            | NSWindowStyleMask::Resizable
+            | NSWindowStyleMask::FullSizeContentView;
+        let this = mtm.alloc().set_ivars(Ivars {
+            store: RefCell::new(store),
+            rows: RefCell::new(rows),
+            recent: RefCell::new(recent),
+            query: RefCell::new(String::new()),
+            search: RefCell::new(None),
+            table: RefCell::new(None),
+            text: RefCell::new(None),
+            image: RefCell::new(None),
+            document: RefCell::new(None),
+            preview_kind: Cell::new(0),
+            meta: RefCell::new(None),
+            list_scroll: RefCell::new(None),
+            text_scroll: RefCell::new(None),
+            last_change: Cell::new(0),
+            ignore_change: Cell::new(-1),
+            prev_pid: Cell::new(0),
+            previewing: Cell::new(false),
+            ocr: crate::ocr::Worker::new(),
+            ocr_pending: RefCell::new(HashSet::new()),
+            ocr_scan_at: Cell::new(Instant::now()),
+        });
+        let this: Retained<Self> = unsafe {
+            msg_send![
+                super(this),
+                initWithContentRect: frame,
+                styleMask: style,
+                backing: NSBackingStoreType::Buffered,
+                defer: false,
+            ]
+        };
+        this.setTitle(ns_string!("Clip"));
+        this.setTitleVisibility(objc2_app_kit::NSWindowTitleVisibility::Hidden);
+        this.setTitlebarAppearsTransparent(true);
+        this.setMovableByWindowBackground(true);
+        this.setLevel(objc2_app_kit::NSFloatingWindowLevel + 1);
+        this.build_views(mtm);
+        let pb = NSPasteboard::generalPasteboard();
+        this.ivars().last_change.set(pb.changeCount());
+        this
+    }
+
+    fn build_views(&self, mtm: MainThreadMarker) {
+        let content = self.contentView().expect("content");
+        let search = NSSearchField::initWithFrame(
+            NSSearchField::alloc(mtm),
+            NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(10.0, 10.0)),
+        );
+        search.setPlaceholderString(Some(ns_string!("Type to filter")));
+        content.addSubview(&search);
+
+        let table = NSTableView::initWithFrame(
+            NSTableView::alloc(mtm),
+            NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(10.0, 10.0)),
+        );
+        let column =
+            NSTableColumn::initWithIdentifier(NSTableColumn::alloc(mtm), ns_string!("main"));
+        table.addTableColumn(&column);
+        table.setHeaderView(None);
+        table.setRowHeight(32.0);
+        unsafe {
+            let src = ProtocolObject::from_ref(self);
+            table.setDataSource(Some(src));
+            table.setDelegate(Some(ProtocolObject::from_ref(self)));
+        }
+        let list_scroll = NSScrollView::initWithFrame(
+            NSScrollView::alloc(mtm),
+            NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(10.0, 10.0)),
+        );
+        list_scroll.setHasVerticalScroller(true);
+        list_scroll.setDocumentView(Some(&table));
+        content.addSubview(&list_scroll);
+
+        let text = NSTextView::initWithFrame(
+            NSTextView::alloc(mtm),
+            NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(10.0, 10.0)),
+        );
+        text.setEditable(false);
+        text.setSelectable(true);
+        text.setRichText(false);
+        let text_scroll = NSScrollView::initWithFrame(
+            NSScrollView::alloc(mtm),
+            NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(10.0, 10.0)),
+        );
+        text_scroll.setHasVerticalScroller(true);
+        text_scroll.setDocumentView(Some(&text));
+        content.addSubview(&text_scroll);
+
+        let image = NSImageView::initWithFrame(
+            NSImageView::alloc(mtm),
+            NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(10.0, 10.0)),
+        );
+        image.setImageScaling(objc2_app_kit::NSImageScaling::ScaleProportionallyUpOrDown);
+        content.addSubview(&image);
+
+        let document = unsafe {
+            let view = QLPreviewView::initWithFrame_style(
+                QLPreviewView::alloc(mtm),
+                NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(10.0, 10.0)),
+                QLPreviewViewStyle::Compact,
+            );
+            if let Some(view) = &view {
+                view.setAutostarts(false);
+                view.setHidden(true);
+                content.addSubview(view);
+            }
+            view
+        };
+
+        let meta = NSTextField::labelWithString(ns_string!(""), mtm);
+        meta.setTextColor(Some(&objc2_app_kit::NSColor::secondaryLabelColor()));
+        content.addSubview(&meta);
+
+        *self.ivars().search.borrow_mut() = Some(search);
+        *self.ivars().table.borrow_mut() = Some(table);
+        *self.ivars().text.borrow_mut() = Some(text);
+        *self.ivars().image.borrow_mut() = Some(image);
+        *self.ivars().document.borrow_mut() = document;
+        *self.ivars().meta.borrow_mut() = Some(meta);
+        *self.ivars().list_scroll.borrow_mut() = Some(list_scroll);
+        *self.ivars().text_scroll.borrow_mut() = Some(text_scroll);
+        self.layout();
+        self.select_row(0);
+    }
+
+    fn layout(&self) {
+        let bounds = self.contentView().expect("content").bounds();
+        let w = bounds.size.width;
+        let h = bounds.size.height;
+        let pad = 10.0;
+        let search_h = 28.0;
+        let meta_h = 22.0;
+        let list_w = 320.0;
+        if let Some(search) = self.ivars().search.borrow().as_ref() {
+            search.setFrame(NSRect::new(
+                NSPoint::new(pad, h - pad - search_h - 8.0),
+                NSSize::new(w - pad * 2.0, search_h),
+            ));
+        }
+        let body_top = h - pad - search_h - 16.0;
+        let body_h = (body_top - pad).max(40.0);
+        if let Some(list) = self.ivars().list_scroll.borrow().as_ref() {
+            list.setFrame(NSRect::new(
+                NSPoint::new(pad, pad),
+                NSSize::new(list_w, body_h),
+            ));
+        }
+        let preview_x = pad + list_w + 8.0;
+        let preview_w = (w - preview_x - pad).max(40.0);
+        if let Some(meta) = self.ivars().meta.borrow().as_ref() {
+            meta.setFrame(NSRect::new(
+                NSPoint::new(preview_x, pad),
+                NSSize::new(preview_w, meta_h),
+            ));
+        }
+        let preview_h = (body_h - meta_h - 6.0).max(40.0);
+        let image_fraction = if self.ivars().preview_kind.get() == 1 {
+            0.65
+        } else {
+            0.0
+        };
+        if let Some(image) = self.ivars().image.borrow().as_ref() {
+            image.setFrame(NSRect::new(
+                NSPoint::new(
+                    preview_x,
+                    pad + meta_h + 6.0 + preview_h * (1.0 - image_fraction),
+                ),
+                NSSize::new(preview_w, preview_h * image_fraction),
+            ));
+        }
+        if let Some(text) = self.ivars().text_scroll.borrow().as_ref() {
+            text.setFrame(NSRect::new(
+                NSPoint::new(preview_x, pad + meta_h + 6.0),
+                NSSize::new(preview_w, preview_h * (1.0 - image_fraction)),
+            ));
+        }
+        if let Some(document) = self.ivars().document.borrow().as_ref() {
+            document.setFrame(NSRect::new(
+                NSPoint::new(preview_x, pad + meta_h + 6.0),
+                NSSize::new(preview_w, preview_h),
+            ));
+        }
+    }
+
+    fn show_panel(&self) {
+        if let Some(app) = NSWorkspace::sharedWorkspace().frontmostApplication() {
+            self.ivars().prev_pid.set(app.processIdentifier());
+        }
+        if let Some(screen) = NSScreen::mainScreen(self.mtm()) {
+            let vis = screen.visibleFrame();
+            let size = NSSize::new(920.0, 560.0);
+            self.setFrame_display(
+                NSRect::new(
+                    NSPoint::new(
+                        vis.origin.x + (vis.size.width - size.width) / 2.0,
+                        vis.origin.y + (vis.size.height - size.height) / 2.0,
+                    ),
+                    size,
+                ),
+                true,
+            );
+        }
+        self.layout();
+        self.makeKeyAndOrderFront(None);
+        NSApplication::sharedApplication(self.mtm()).activateIgnoringOtherApps(true);
+        if let Some(search) = self.ivars().search.borrow().as_ref() {
+            self.makeFirstResponder(Some(search));
+        }
+        self.ivars().previewing.set(false);
+    }
+
+    fn hide_panel(&self) {
+        self.orderOut(None);
+    }
+
+    fn poll_hotkey(&self) {
+        while let Ok(event) = GlobalHotKeyEvent::receiver().try_recv() {
+            if event.state == HotKeyState::Pressed {
+                if self.isVisible() {
+                    self.hide_panel();
+                } else {
+                    self.show_panel();
+                }
+            }
+        }
+    }
+
+    fn poll_query(&self) {
+        let Some(search) = self.ivars().search.borrow().clone() else {
+            return;
+        };
+        let text = search.stringValue().to_string();
+        if text == *self.ivars().query.borrow() {
+            return;
+        }
+        *self.ivars().query.borrow_mut() = text.clone();
+        let hits = if text.trim().is_empty() {
+            self.ivars().recent.borrow().clone()
+        } else {
+            self.ivars().store.borrow().search(&text, 80)
+        };
+        *self.ivars().rows.borrow_mut() = hits;
+        if let Some(table) = self.ivars().table.borrow().as_ref() {
+            table.reloadData();
+        }
+        self.select_row(0);
+    }
+
+    fn poll_ocr(&self) {
+        while let Ok(result) = self.ivars().ocr.results.try_recv() {
+            self.ivars().ocr_pending.borrow_mut().remove(&result.id);
+            if let Err(error) = self.ivars().store.borrow_mut().finish_ocr(&result) {
+                eprintln!("clip: could not save OCR result: {error}");
+            }
+        }
+        let now = Instant::now();
+        if now < self.ivars().ocr_scan_at.get() {
+            return;
+        }
+        self.ivars().ocr_scan_at.set(now + Duration::from_secs(1));
+        let jobs = match self.ivars().store.borrow().pending_ocr() {
+            Ok(jobs) => jobs,
+            Err(error) => {
+                eprintln!("clip: could not read OCR queue: {error}");
+                return;
+            }
+        };
+        for job in jobs {
+            if self.ivars().ocr_pending.borrow().contains(&job.id) {
+                continue;
+            }
+            let id = job.id.clone();
+            if self.ivars().ocr.submit(job).is_ok() {
+                self.ivars().ocr_pending.borrow_mut().insert(id);
+            }
+        }
+    }
+
+    fn select_row(&self, row: isize) {
+        let Some(table) = self.ivars().table.borrow().clone() else {
+            return;
+        };
+        let n = self.ivars().rows.borrow().len() as isize;
+        if n == 0 || row < 0 || row >= n {
+            self.show_selected();
+            return;
+        }
+        let indexes = NSIndexSet::indexSetWithIndex(row as usize);
+        table.selectRowIndexes_byExtendingSelection(&indexes, false);
+        table.scrollRowToVisible(row);
+        self.show_selected();
+    }
+
+    fn show_selected(&self) {
+        let row = self
+            .ivars()
+            .table
+            .borrow()
+            .as_ref()
+            .map(|t| t.selectedRow())
+            .unwrap_or(-1);
+        let id = self
+            .ivars()
+            .rows
+            .borrow()
+            .get(row as usize)
+            .map(|h| h.id.clone());
+        let Some(id) = id else {
+            if let Some(text) = self.ivars().text.borrow().as_ref() {
+                text.setString(ns_string!(""));
+            }
+            return;
+        };
+        let Some(preview) = self.ivars().store.borrow().preview(&id) else {
+            return;
+        };
+        let is_document = preview.file_path.as_ref().is_some_and(|p| p.exists())
+            && self.ivars().document.borrow().is_some();
+        self.ivars().preview_kind.set(if is_document {
+            2
+        } else if preview.image_path.is_some() {
+            1
+        } else {
+            0
+        });
+        if let Some(document) = self.ivars().document.borrow().as_ref() {
+            if let Some(path) = preview.file_path.as_ref().filter(|_| is_document) {
+                let url = NSURL::fileURLWithPath(&NSString::from_str(&path.to_string_lossy()));
+                unsafe {
+                    document.setPreviewItem(Some(ProtocolObject::from_ref(&*url)));
+                }
+            }
+            document.setHidden(!is_document);
+        }
+        if let Some(scroll) = self.ivars().text_scroll.borrow().as_ref() {
+            scroll.setHidden(is_document);
+        }
+        self.layout();
+        if let Some(text) = self.ivars().text.borrow().as_ref() {
+            text.setString(&NSString::from_str(&preview.text));
+        }
+        if let Some(image) = self.ivars().image.borrow().as_ref() {
+            let path = preview.image_path.clone().or(preview.file_path.clone());
+            if let Some(path) = path.filter(|_| !is_document) {
+                if preview.image_path.is_some() {
+                    image.setImage(
+                        NSImage::initWithContentsOfFile(
+                            NSImage::alloc(),
+                            &NSString::from_str(&path.display().to_string()),
+                        )
+                        .as_deref(),
+                    );
+                } else {
+                    image.setImage(Some(
+                        &NSWorkspace::sharedWorkspace()
+                            .iconForFile(&NSString::from_str(&path.display().to_string())),
+                    ));
+                }
+                image.setHidden(false);
+            } else {
+                image.setImage(None);
+                image.setHidden(true);
+            }
+        }
+        if let Some(meta) = self.ivars().meta.borrow().as_ref() {
+            let size = preview
+                .bytes
+                .map(|n| format!("   {n} bytes"))
+                .unwrap_or_default();
+            let line = format!(
+                "{}   {}   {}{size}",
+                preview.source,
+                preview.kind,
+                store::format_when(&preview.created_at)
+            );
+            meta.setStringValue(&NSString::from_str(&line));
+        }
+    }
+
+    fn move_selection(&self, delta: isize) {
+        let current = self
+            .ivars()
+            .table
+            .borrow()
+            .as_ref()
+            .map(|t| t.selectedRow())
+            .unwrap_or(0);
+        let next = (current + delta).max(0);
+        self.select_row(next);
+    }
+
+    fn focus_preview(&self) {
+        self.ivars().previewing.set(true);
+        if self.ivars().preview_kind.get() == 2 {
+            if let Some(document) = self.ivars().document.borrow().as_ref() {
+                self.makeFirstResponder(Some(document));
+            }
+            return;
+        }
+        if let Some(text) = self.ivars().text.borrow().as_ref() {
+            self.makeFirstResponder(Some(text));
+        }
+    }
+
+    fn focus_search(&self) {
+        self.ivars().previewing.set(false);
+        if let Some(search) = self.ivars().search.borrow().as_ref() {
+            self.makeFirstResponder(Some(search));
+        }
+    }
+
+    fn paste_selected(&self) {
+        let row = self
+            .ivars()
+            .table
+            .borrow()
+            .as_ref()
+            .map(|t| t.selectedRow())
+            .unwrap_or(-1);
+        let id = self
+            .ivars()
+            .rows
+            .borrow()
+            .get(row as usize)
+            .map(|h| h.id.clone());
+        let Some(id) = id else {
+            return;
+        };
+        let Some(preview) = self.ivars().store.borrow().preview(&id) else {
+            return;
+        };
+        let pb = NSPasteboard::generalPasteboard();
+        pb.clearContents();
+        if let Some(path) = preview.image_path.as_ref().filter(|p| p.exists()) {
+            if let Ok(bytes) = std::fs::read(path) {
+                let data = objc2_foundation::NSData::from_vec(bytes);
+                let data_type = if path
+                    .extension()
+                    .is_some_and(|ext| ext == "tiff" || ext == "tif")
+                {
+                    unsafe { NSPasteboardTypeTIFF }
+                } else {
+                    unsafe { NSPasteboardTypePNG }
+                };
+                pb.setData_forType(Some(&data), data_type);
+            }
+        } else if let Some(path) = preview.file_path.as_ref().filter(|p| p.exists()) {
+            pb.setString_forType(
+                &NSURL::fileURLWithPath(&NSString::from_str(&path.to_string_lossy()))
+                    .absoluteString(),
+                unsafe { NSPasteboardTypeFileURL },
+            );
+        } else {
+            pb.setString_forType(&NSString::from_str(&preview.text), unsafe {
+                NSPasteboardTypeString
+            });
+        }
+        self.ivars().ignore_change.set(pb.changeCount());
+        let pid = self.ivars().prev_pid.get();
+        self.hide_panel();
+        if let Some(app) = NSRunningApplication::runningApplicationWithProcessIdentifier(pid) {
+            app.activateWithOptions(NSApplicationActivationOptions::ActivateIgnoringOtherApps);
+        }
+        // Let the previous app become key before the key event.
+        unsafe {
+            let _ = NSTimer::scheduledTimerWithTimeInterval_target_selector_userInfo_repeats(
+                0.05,
+                self,
+                objc2::sel!(pasteNow:),
+                None,
+                false,
+            );
+        }
+    }
+
+    fn poll_pasteboard(&self) {
+        let pb = NSPasteboard::generalPasteboard();
+        let count = pb.changeCount();
+        if count == self.ivars().last_change.get() || count == self.ivars().ignore_change.get() {
+            return;
+        }
+        self.ivars().last_change.set(count);
+        let (source, bundle) = front_app();
+        if matches!(
+            bundle.as_str(),
+            "com.apple.keychainaccess" | "com.apple.Passwords" | "com.apple.passwordmanager"
+        ) {
+            return;
+        }
+        let source = if source.is_empty() {
+            None
+        } else {
+            Some(source)
+        };
+        let mut inserted = false;
+        if let Some(text) = pb.stringForType(unsafe { NSPasteboardTypeString }) {
+            let text = text.to_string();
+            if !text.is_empty() && !text.starts_with("file://") {
+                inserted = self
+                    .ivars()
+                    .store
+                    .borrow_mut()
+                    .insert_text(&text, source.as_deref());
+            }
+        }
+        if let Some(data) = pb
+            .dataForType(unsafe { NSPasteboardTypePNG })
+            .or_else(|| pb.dataForType(unsafe { NSPasteboardTypeTIFF }))
+        {
+            let ext = if pb.dataForType(unsafe { NSPasteboardTypePNG }).is_some() {
+                "png"
+            } else {
+                "tiff"
+            };
+            inserted = self.ivars().store.borrow_mut().insert_image(
+                &data.to_vec(),
+                ext,
+                source.as_deref(),
+            ) || inserted;
+        }
+        if let Some(file) = pb.stringForType(unsafe { NSPasteboardTypeFileURL }) {
+            let path = file.to_string().trim_start_matches("file://").to_string();
+            let path = percent_decode(&path);
+            inserted = self
+                .ivars()
+                .store
+                .borrow_mut()
+                .insert_file(std::path::Path::new(&path), source.as_deref())
+                || inserted;
+        }
+        // A duplicate also changes its recency.
+        {
+            let recent = self.ivars().store.borrow().recent(200);
+            *self.ivars().recent.borrow_mut() = recent;
+            if self.ivars().query.borrow().trim().is_empty() {
+                *self.ivars().rows.borrow_mut() = self.ivars().recent.borrow().clone();
+                if let Some(table) = self.ivars().table.borrow().as_ref() {
+                    table.reloadData();
+                }
+            }
+        }
+    }
+
+    fn handle_key(&self, event: &NSEvent) -> bool {
+        if !self.isVisible() {
+            return false;
+        }
+        match event.keyCode() {
+            53 => {
+                self.hide_panel();
+                true
+            }
+            36 | 76 => {
+                self.paste_selected();
+                true
+            }
+            124 => {
+                self.focus_preview();
+                true
+            }
+            123 => {
+                self.focus_search();
+                true
+            }
+            125 => {
+                if self.ivars().previewing.get() {
+                    return false;
+                }
+                self.move_selection(1);
+                true
+            }
+            126 => {
+                if self.ivars().previewing.get() {
+                    return false;
+                }
+                self.move_selection(-1);
+                true
+            }
+            _ => false,
+        }
+    }
+}
+
+fn front_app() -> (String, String) {
+    let Some(app) = NSWorkspace::sharedWorkspace().frontmostApplication() else {
+        return (String::new(), String::new());
+    };
+    let name = app
+        .localizedName()
+        .map(|s| s.to_string())
+        .unwrap_or_default();
+    let bundle = app
+        .bundleIdentifier()
+        .map(|s| s.to_string())
+        .unwrap_or_default();
+    (name, bundle)
+}
+
+fn percent_decode(input: &str) -> String {
+    let bytes = input.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() {
+            if let Ok(v) = u8::from_str_radix(&input[i + 1..i + 3], 16) {
+                out.push(v);
+                i += 3;
+                continue;
+            }
+        }
+        out.push(bytes[i]);
+        i += 1;
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
+pub fn run() {
+    let mtm = MainThreadMarker::new().expect("main thread");
+    let app = NSApplication::sharedApplication(mtm);
+    app.setActivationPolicy(NSApplicationActivationPolicy::Accessory);
+
+    let store = Store::open().unwrap_or_else(|e| {
+        eprintln!("clip: {e}");
+        std::process::exit(1);
+    });
+    let panel = ClipPanel::new(mtm, store);
+
+    let manager = GlobalHotKeyManager::new().expect("hotkey");
+    // Cmd+Shift+U on ADNW is physical W. Cmd+U stays on Raycast until this replaces it.
+    let hotkey = HotKey::new(Some(Modifiers::META | Modifiers::SHIFT), Code::KeyW);
+    manager.register(hotkey).expect("register hotkey");
+    std::mem::forget(manager);
+    eprintln!(
+        "clip: Cmd+Shift+U opens it. paste keycode {}",
+        paste::paste_keycode()
+    );
+
+    let panel_for_keys = panel.clone();
+    let block = RcBlock::new(move |event: std::ptr::NonNull<NSEvent>| -> *mut NSEvent {
+        let event_ref = unsafe { event.as_ref() };
+        if panel_for_keys.handle_key(event_ref) {
+            std::ptr::null_mut()
+        } else {
+            event.as_ptr()
+        }
+    });
+    let block: &'static RcBlock<dyn Fn(std::ptr::NonNull<NSEvent>) -> *mut NSEvent> =
+        Box::leak(Box::new(block));
+    unsafe {
+        NSEvent::addLocalMonitorForEventsMatchingMask_handler(NSEventMask::KeyDown, block);
+    }
+
+    unsafe {
+        let _timer = NSTimer::scheduledTimerWithTimeInterval_target_selector_userInfo_repeats(
+            0.05,
+            &panel,
+            objc2::sel!(tick:),
+            None,
+            true,
+        );
+        std::mem::forget(_timer);
+    }
+
+    app.run();
+}
