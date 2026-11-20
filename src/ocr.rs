@@ -2,7 +2,8 @@
 use std::path::PathBuf;
 use std::sync::mpsc::{self, Receiver, SyncSender, TrySendError};
 
-use objc2::{AnyThread, autoreleasepool};
+use objc2::AnyThread;
+use objc2::rc::autoreleasepool;
 use objc2_foundation::{NSArray, NSDictionary, NSString, NSURL};
 use objc2_vision::{
     VNImageRequestHandler, VNRecognizeTextRequest, VNRequest, VNRequestTextRecognitionLevel,

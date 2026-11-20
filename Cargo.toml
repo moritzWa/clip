@@ -11,5 +11,5 @@ objc2-app-kit = "0.3.2"
 objc2-foundation = "0.3.2"
 objc2-quick-look-ui = "0.3.2"
 objc2-vision = "0.3.2"
-rusqlite = { version = "0.43.0", features = ["bundled"] }
+rusqlite = { version = "0.43.0", features = ["backup", "bundled"] }
 sha2 = "0.11.1"

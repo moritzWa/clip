@@ -1,3 +1,4 @@
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -42,16 +43,24 @@ impl Store {
 
     fn open_in(dir: &Path) -> Result<Self, String> {
         std::fs::create_dir_all(dir.join("files")).map_err(|e| e.to_string())?;
+        std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))
+            .map_err(|e| e.to_string())?;
         let imported = dir.join("import/history.db");
         let live = dir.join("history.db");
-        let path = if live.exists() {
-            live
-        } else if imported.exists() {
-            imported
-        } else {
-            live
-        };
+        if !live.exists() && imported.exists() {
+            let source =
+                Connection::open_with_flags(&imported, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
+                    .map_err(|e| e.to_string())?;
+            let staging = dir.join(format!("{}.db", new_id()));
+            source
+                .backup("main", &staging, None::<fn(rusqlite::backup::Progress)>)
+                .map_err(|e| e.to_string())?;
+            std::fs::rename(&staging, &live).map_err(|e| e.to_string())?;
+        }
+        let path = live;
         let conn = Connection::open(&path).map_err(|e| e.to_string())?;
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))
+            .map_err(|e| e.to_string())?;
         conn.busy_timeout(std::time::Duration::from_millis(500))
             .map_err(|e| e.to_string())?;
         conn.execute_batch(
@@ -82,9 +91,30 @@ impl Store {
             CREATE INDEX IF NOT EXISTS entries_hash ON entries(content_hash);
             CREATE INDEX IF NOT EXISTS entries_recency ON entries(COALESCE(updated_at, created_at) DESC, id DESC);
             CREATE VIRTUAL TABLE IF NOT EXISTS parts_fts USING fts5(text, entry_id UNINDEXED, tokenize='unicode61');
+            CREATE VIRTUAL TABLE IF NOT EXISTS entry_search USING fts5(title, text, entry_id UNINDEXED, tokenize='unicode61', prefix='2 3');
+            CREATE TABLE IF NOT EXISTS entry_search_map(entry_id TEXT PRIMARY KEY, seq INTEGER NOT NULL UNIQUE);
             ",
         )
         .map_err(|e| e.to_string())?;
+        let indexed: i64 = conn
+            .query_row("SELECT count(*) FROM entry_search_map", [], |r| r.get(0))
+            .map_err(|e| e.to_string())?;
+        if indexed == 0 {
+            let tx = conn.unchecked_transaction().map_err(|e| e.to_string())?;
+            {
+                let mut stmt = tx
+                    .prepare("SELECT id FROM entries ORDER BY COALESCE(updated_at, created_at), id")
+                    .map_err(|e| e.to_string())?;
+                let rows = stmt
+                    .query_map([], |r| r.get::<_, String>(0))
+                    .map_err(|e| e.to_string())?;
+                for row in rows {
+                    refresh_search_entry(&tx, &row.map_err(|e| e.to_string())?)
+                        .map_err(|e| e.to_string())?;
+                }
+            }
+            tx.commit().map_err(|e| e.to_string())?;
+        }
         Ok(Self {
             conn,
             files: dir.join("files"),
@@ -112,31 +142,21 @@ impl Store {
         if fts.is_empty() {
             return self.recent(limit);
         }
-        let like = format!(
-            "%{}%",
-            query
-                .trim()
-                .replace('\\', "\\\\")
-                .replace('%', "\\%")
-                .replace('_', "\\_")
-        );
         let mut stmt = self
             .conn
             .prepare(
                 "SELECT e.id, COALESCE(e.title, ''), e.created_at, COALESCE(e.source_name, ''), COALESCE(e.categories, '')
-                 FROM entries e
-                 WHERE e.id IN (
-                     SELECT entry_id FROM parts_fts WHERE parts_fts MATCH ?1
-                     UNION
-                     SELECT id FROM entries WHERE title LIKE ?2 ESCAPE '\\'
-                 )
-                 ORDER BY COALESCE(e.updated_at, e.created_at) DESC
-                 LIMIT ?3",
+                 FROM entry_search s JOIN entries e ON e.id = s.entry_id
+                 WHERE entry_search MATCH ?1
+                 ORDER BY s.rowid DESC LIMIT ?2",
             )
             .expect("search");
-        stmt.query_map(params![fts, like, limit as i64], row_hit)
+        stmt.query_map(params![fts, limit as i64], row_hit)
             .map(|rows| rows.filter_map(|r| r.ok()).collect())
-            .unwrap_or_else(|_| self.recent(limit))
+            .unwrap_or_else(|error| {
+                eprintln!("clip: search failed: {error}");
+                Vec::new()
+            })
     }
 
     pub fn preview(&self, id: &str) -> Option<Preview> {
@@ -236,6 +256,7 @@ impl Store {
                 "INSERT INTO parts_fts (text, entry_id) VALUES (?1, ?2)",
                 params![text, id],
             )?;
+            refresh_search_entry(&tx, &id)?;
             Ok(())
         })();
         result.is_ok() && tx.commit().is_ok()
@@ -273,6 +294,7 @@ impl Store {
                 "INSERT INTO parts (id, entry_id, kind, mime, text, file_path) VALUES (?1, ?2, 'image', ?3, '', ?4)",
                 params![format!("{id}:i"), id, format!("image/{ext}"), path.display().to_string()],
             )?;
+            refresh_search_entry(&tx, &id)?;
             Ok(())
         })();
         result.is_ok() && tx.commit().is_ok()
@@ -310,12 +332,16 @@ impl Store {
                 "INSERT INTO parts_fts (text, entry_id) VALUES (?1, ?2)",
                 params![title, id],
             )?;
+            refresh_search_entry(&tx, &id)?;
             Ok(())
         })();
         result.is_ok() && tx.commit().is_ok()
     }
 
     fn bump_hash(&self, hash: &str) -> bool {
+        let Ok(tx) = self.conn.unchecked_transaction() else {
+            return false;
+        };
         let now = now_rfc3339();
         let n = self
             .conn
@@ -327,7 +353,19 @@ impl Store {
                 params![now, hash],
             )
             .unwrap_or(0);
-        n > 0
+        if n == 0 {
+            return false;
+        }
+        let id: rusqlite::Result<String> = tx.query_row("SELECT id FROM entries WHERE content_hash = ?1 ORDER BY COALESCE(updated_at, created_at) DESC LIMIT 1", [hash], |r| r.get(0));
+        let Ok(id) = id else {
+            return false;
+        };
+        let updated = (|| -> rusqlite::Result<()> {
+            tx.execute("DELETE FROM entry_search WHERE rowid = (SELECT seq FROM entry_search_map WHERE entry_id = ?1)", [&id])?;
+            tx.execute("DELETE FROM entry_search_map WHERE entry_id = ?1", [&id])?;
+            refresh_search_entry(&tx, &id)
+        })();
+        updated.is_ok() && tx.commit().is_ok()
     }
 
     pub fn pending_ocr(&self) -> rusqlite::Result<Vec<crate::ocr::Job>> {
@@ -357,14 +395,40 @@ impl Store {
             "INSERT OR IGNORE INTO parts (id, entry_id, kind, mime, text, file_path) VALUES (?1, ?2, ?3, 'text/plain', ?4, '')",
             params![format!("{}:ocr", result.id), result.id, kind, text],
         )?;
-        if let Ok(text) = &result.text && inserted > 0 {
+        if let Ok(text) = &result.text
+            && inserted > 0
+        {
             tx.execute(
                 "INSERT INTO parts_fts (text, entry_id) VALUES (?1, ?2)",
                 params![text, result.id],
             )?;
         }
+        refresh_search_entry(&tx, &result.id)?;
         tx.commit()
     }
+}
+
+fn refresh_search_entry(conn: &Connection, id: &str) -> rusqlite::Result<()> {
+    let previous_seq = conn
+        .query_row(
+            "SELECT seq FROM entry_search_map WHERE entry_id = ?1",
+            [id],
+            |r| r.get::<_, i64>(0),
+        )
+        .ok();
+    conn.execute("DELETE FROM entry_search WHERE rowid = (SELECT seq FROM entry_search_map WHERE entry_id = ?1)", [id])?;
+    conn.execute("DELETE FROM entry_search_map WHERE entry_id = ?1", [id])?;
+    conn.execute(
+        "INSERT INTO entry_search(rowid, title, text, entry_id)
+         SELECT ?2, COALESCE(title, ''), COALESCE((SELECT group_concat(text, char(10)) FROM parts WHERE entry_id = e.id AND kind IN ('text', 'link', 'ocr')), ''), id
+         FROM entries e WHERE id = ?1", params![id, previous_seq],
+    )?;
+    let seq = conn.last_insert_rowid();
+    conn.execute(
+        "INSERT INTO entry_search_map(entry_id, seq) VALUES (?1, ?2)",
+        params![id, seq],
+    )?;
+    Ok(())
 }
 
 fn row_hit(r: &rusqlite::Row<'_>) -> rusqlite::Result<Hit> {
@@ -600,10 +664,11 @@ mod tests {
             .store
             .conn
             .execute(
-                "INSERT INTO parts_fts(text, entry_id) VALUES ('Invoice asparagus', 'scan')",
+                "INSERT INTO parts(id, entry_id, kind, text) VALUES ('scan:ocr', 'scan', 'ocr', 'Invoice asparagus')",
                 [],
             )
             .unwrap();
+        refresh_search_entry(&fixture.store.conn, "scan").unwrap();
         let hits = fixture.store.search("aspar", 10);
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0].id, "scan");
@@ -619,21 +684,66 @@ mod tests {
     }
 
     #[test]
+    fn opening_recovered_history_does_not_modify_the_archive() {
+        let mut fixture = Fixture::new();
+        fixture.store.insert_text("recovered original", None);
+        let dest = fixture.dir.join("fresh-app");
+        std::fs::create_dir_all(dest.join("import")).unwrap();
+        let archive = dest.join("import/history.db");
+        fixture
+            .store
+            .conn
+            .backup("main", &archive, None::<fn(rusqlite::backup::Progress)>)
+            .unwrap();
+        let mut live = Store::open_in(&dest).unwrap();
+        assert!(dest.join("history.db").exists());
+        assert_eq!(live.search("recovered", 10).len(), 1);
+        live.insert_text("newly captured", None);
+        let source = Connection::open(&archive).unwrap();
+        let count: i64 = source
+            .query_row("SELECT count(*) FROM entries", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(count, 1);
+        assert_eq!(live.recent(10).len(), 2);
+    }
+
+    #[test]
     fn ocr_completion_indexes_once_and_failed_jobs_do_not_loop() {
         let mut fixture = Fixture::new();
-        assert!(fixture.store.insert_image(b"synthetic fixture, not decoded in this test", "png", None));
+        assert!(fixture.store.insert_image(
+            b"synthetic fixture, not decoded in this test",
+            "png",
+            None
+        ));
         let job = fixture.store.pending_ocr().unwrap().remove(0);
-        let completed = crate::ocr::Completed { id: job.id, text: Ok("screenshot bananas".into()) };
+        let completed = crate::ocr::Completed {
+            id: job.id,
+            text: Ok("screenshot bananas".into()),
+        };
         fixture.store.finish_ocr(&completed).unwrap();
         fixture.store.finish_ocr(&completed).unwrap();
         assert!(fixture.store.pending_ocr().unwrap().is_empty());
         assert_eq!(fixture.store.search("bananas", 10).len(), 1);
-        let count: i64 = fixture.store.conn.query_row("SELECT count(*) FROM parts_fts", [], |r| r.get(0)).unwrap();
+        let count: i64 = fixture
+            .store
+            .conn
+            .query_row("SELECT count(*) FROM parts_fts", [], |r| r.get(0))
+            .unwrap();
         assert_eq!(count, 1);
 
-        assert!(fixture.store.insert_image(b"second synthetic fixture", "png", None));
+        assert!(
+            fixture
+                .store
+                .insert_image(b"second synthetic fixture", "png", None)
+        );
         let job = fixture.store.pending_ocr().unwrap().remove(0);
-        fixture.store.finish_ocr(&crate::ocr::Completed { id: job.id, text: Err("not an image".into()) }).unwrap();
+        fixture
+            .store
+            .finish_ocr(&crate::ocr::Completed {
+                id: job.id,
+                text: Err("not an image".into()),
+            })
+            .unwrap();
         assert!(fixture.store.pending_ocr().unwrap().is_empty());
     }
 
@@ -641,5 +751,51 @@ mod tests {
     fn civil_dates_include_epoch_and_leap_day() {
         assert_eq!(civil_from_days(0), (1970, 1, 1));
         assert_eq!(civil_from_days(19_782), (2024, 2, 29));
+    }
+
+    #[test]
+    #[ignore = "explicit synthetic performance run"]
+    fn benchmark_100k_synthetic_entries() {
+        let mut fixture = Fixture::new();
+        let tx = fixture.store.conn.transaction().unwrap();
+        {
+            let mut entry = tx.prepare_cached(
+                "INSERT INTO entries(id, created_at, updated_at, title, categories) VALUES (?1, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z', ?2, '[\"text\"]')"
+            ).unwrap();
+            let mut index = tx
+                .prepare_cached("INSERT INTO parts_fts(text, entry_id) VALUES (?1, ?2)")
+                .unwrap();
+            for n in 0..100_000 {
+                let id = format!("synthetic-{n:06}");
+                let text = format!("Synthetic clipboard record {n} project bucket{}", n % 1000);
+                entry.execute(params![id, text]).unwrap();
+                index.execute(params![text, id]).unwrap();
+                refresh_search_entry(&tx, &id).unwrap();
+            }
+        }
+        tx.commit().unwrap();
+        for (name, query) in [
+            ("recent", ""),
+            ("rare", "bucket999"),
+            ("common", "clipboard"),
+            ("miss", "missingvalue"),
+        ] {
+            let mut times = Vec::new();
+            for _ in 0..40 {
+                let start = std::time::Instant::now();
+                let hits = fixture.store.search(query, 80);
+                times.push(start.elapsed().as_micros());
+                if name == "miss" {
+                    assert!(hits.is_empty());
+                } else {
+                    assert_eq!(hits.len(), 80);
+                }
+            }
+            times.sort_unstable();
+            println!(
+                "100k synthetic {name}: p50={}us p95={}us",
+                times[20], times[38]
+            );
+        }
     }
 }

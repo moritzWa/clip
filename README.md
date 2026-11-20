@@ -18,8 +18,9 @@ permission. The current prototype does not install itself or start at login.
 ## Storage
 
 Data lives under `~/Library/Application Support/Clip/`, never in this repository.
-The prototype uses `history.db`, falling back to the recovered
-`import/history.db`. Images are separate files. The initial import contains
+The source uses `history.db`, taking a consistent SQLite backup of the recovered
+`import/history.db` on first use. The old running prototype still uses the import
+directly. Images are separate files. The initial import contains
 1,100 entries and the OCR text Raycast had already generated.
 
 The source now includes a bounded, single-worker Vision OCR queue, native Quick
@@ -46,8 +47,25 @@ muted audio. Never copy real clipboard history into a shared test environment.
 - Add paging so browsing is not limited to the cached recent entries.
 - Benchmark opening/search against large synthetic histories.
 - Package a signed app, permissions UX and a login item.
-- Make a separate immutable recovery archive and a live database.
 - Add type filters and search highlighting. Time-range filters are backlogged.
 
-No claim that this is faster than Raycast has been measured yet. Encryption
-alone does not establish Raycast's bottleneck.
+## Measured storage performance
+
+An isolated debug-build test with 100,000 synthetic entries (40 samples each)
+measured these p95 times on this Mac:
+
+| Operation | Initial implementation | Recency-ordered FTS index |
+| --- | ---: | ---: |
+| Recent 80 | 0.12 ms | 0.21 ms |
+| Rare search | 18.15 ms | 0.67 ms |
+| Common search | 176.47 ms | 7.08 ms |
+| No matches | 16.03 ms | 0.11 ms |
+
+Search is token-prefix based, not arbitrary substring matching. The unified
+FTS row per entry includes its title, text and OCR. Its row order follows copy
+recency, so searches can stop after the requested number of matches. OCR updates
+retain the original order. A repeated copy moves the entry back to the top.
+
+Run the benchmark with `cargo test benchmark_100k -- --ignored --nocapture`.
+These are warm storage-query timings, not UI latency or a Raycast comparison.
+Encryption alone does not establish Raycast's bottleneck.

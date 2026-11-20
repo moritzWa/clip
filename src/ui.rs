@@ -574,11 +574,11 @@ impl ClipPanel {
                 pb.setData_forType(Some(&data), data_type);
             }
         } else if let Some(path) = preview.file_path.as_ref().filter(|p| p.exists()) {
-            pb.setString_forType(
-                &NSURL::fileURLWithPath(&NSString::from_str(&path.to_string_lossy()))
-                    .absoluteString(),
-                unsafe { NSPasteboardTypeFileURL },
-            );
+            let url = NSURL::fileURLWithPath(&NSString::from_str(&path.to_string_lossy()));
+            let Some(url_string) = url.absoluteString() else {
+                return;
+            };
+            pb.setString_forType(&url_string, unsafe { NSPasteboardTypeFileURL });
         } else {
             pb.setString_forType(&NSString::from_str(&preview.text), unsafe {
                 NSPasteboardTypeString
@@ -790,5 +790,8 @@ pub fn run() {
         std::mem::forget(_timer);
     }
 
+    if std::env::args().any(|arg| arg == "--show") {
+        panel.show_panel();
+    }
     app.run();
 }
