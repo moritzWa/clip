@@ -88,6 +88,7 @@ define_class!(
                 })
                 .unwrap_or_default();
             let label = NSTextField::labelWithString(&NSString::from_str(&title), self.mtm());
+            label.setFont(Some(&objc2_app_kit::NSFont::systemFontOfSize(16.0)));
             label.setLineBreakMode(objc2_app_kit::NSLineBreakMode::ByTruncatingTail);
             Some(unsafe { Retained::cast_unchecked(label) })
         }
@@ -162,6 +163,15 @@ impl ClipPanel {
         this.setTitleVisibility(objc2_app_kit::NSWindowTitleVisibility::Hidden);
         this.setTitlebarAppearsTransparent(true);
         this.setMovableByWindowBackground(true);
+        for button in [
+            objc2_app_kit::NSWindowButton::CloseButton,
+            objc2_app_kit::NSWindowButton::MiniaturizeButton,
+            objc2_app_kit::NSWindowButton::ZoomButton,
+        ] {
+            if let Some(view) = this.standardWindowButton(button) {
+                view.setHidden(true);
+            }
+        }
         this.setLevel(objc2_app_kit::NSFloatingWindowLevel + 1);
         this.build_views(mtm);
         let pb = NSPasteboard::generalPasteboard();
@@ -176,6 +186,7 @@ impl ClipPanel {
             NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(10.0, 10.0)),
         );
         search.setPlaceholderString(Some(ns_string!("Type to filter")));
+        search.setFont(Some(&objc2_app_kit::NSFont::systemFontOfSize(18.0)));
         content.addSubview(&search);
 
         let table = NSTableView::initWithFrame(
@@ -186,7 +197,7 @@ impl ClipPanel {
             NSTableColumn::initWithIdentifier(NSTableColumn::alloc(mtm), ns_string!("main"));
         table.addTableColumn(&column);
         table.setHeaderView(None);
-        table.setRowHeight(32.0);
+        table.setRowHeight(42.0);
         unsafe {
             let src = ProtocolObject::from_ref(self);
             table.setDataSource(Some(src));
@@ -207,6 +218,11 @@ impl ClipPanel {
         text.setEditable(false);
         text.setSelectable(true);
         text.setRichText(false);
+        text.setFont(Some(
+            &objc2_app_kit::NSFont::monospacedSystemFontOfSize_weight(14.0, unsafe {
+                objc2_app_kit::NSFontWeightRegular
+            }),
+        ));
         let text_scroll = NSScrollView::initWithFrame(
             NSScrollView::alloc(mtm),
             NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(10.0, 10.0)),
@@ -376,10 +392,20 @@ impl ClipPanel {
     }
 
     fn poll_ocr(&self) {
+        let mut updated = false;
         while let Ok(result) = self.ivars().ocr.results.try_recv() {
             self.ivars().ocr_pending.borrow_mut().remove(&result.id);
             if let Err(error) = self.ivars().store.borrow_mut().finish_ocr(&result) {
                 eprintln!("clip: could not save OCR result: {error}");
+            } else {
+                updated = true;
+            }
+        }
+        if updated {
+            self.show_selected();
+            if !self.ivars().query.borrow().is_empty() {
+                self.ivars().query.borrow_mut().clear();
+                self.poll_query();
             }
         }
         let now = Instant::now();
@@ -747,6 +773,40 @@ pub fn run() {
     let mtm = MainThreadMarker::new().expect("main thread");
     let app = NSApplication::sharedApplication(mtm);
     app.setActivationPolicy(NSApplicationActivationPolicy::Accessory);
+    let main_menu = objc2_app_kit::NSMenu::new(mtm);
+    let app_item = objc2_app_kit::NSMenuItem::new(mtm);
+    let app_menu = objc2_app_kit::NSMenu::new(mtm);
+    unsafe {
+        app_menu.addItemWithTitle_action_keyEquivalent(
+            ns_string!("Quit Clip"),
+            Some(objc2::sel!(terminate:)),
+            ns_string!("q"),
+        );
+    }
+    app_item.setSubmenu(Some(&app_menu));
+    main_menu.addItem(&app_item);
+    let edit_item = objc2_app_kit::NSMenuItem::new(mtm);
+    edit_item.setTitle(ns_string!("Edit"));
+    let edit_menu =
+        objc2_app_kit::NSMenu::initWithTitle(objc2_app_kit::NSMenu::alloc(mtm), ns_string!("Edit"));
+    for (title, action, key) in [
+        ("Cut", objc2::sel!(cut:), "x"),
+        ("Copy", objc2::sel!(copy:), "c"),
+        ("Paste", objc2::sel!(paste:), "v"),
+        ("Select All", objc2::sel!(selectAll:), "a"),
+    ] {
+        // A nil target routes these standard actions through the responder chain.
+        unsafe {
+            edit_menu.addItemWithTitle_action_keyEquivalent(
+                &NSString::from_str(title),
+                Some(action),
+                &NSString::from_str(key),
+            );
+        }
+    }
+    edit_item.setSubmenu(Some(&edit_menu));
+    main_menu.addItem(&edit_item);
+    app.setMainMenu(Some(&main_menu));
 
     let store = Store::open().unwrap_or_else(|e| {
         eprintln!("clip: {e}");

@@ -748,6 +748,26 @@ mod tests {
     }
 
     #[test]
+    fn recopy_updates_search_order_but_background_ocr_does_not() {
+        let mut fixture = Fixture::new();
+        fixture.store.insert_text("common first", None);
+        fixture.store.insert_text("common second", None);
+        assert_eq!(fixture.store.search("common", 10)[0].title, "common second");
+        fixture.store.insert_text("common first", None);
+        let ordered = fixture.store.search("common", 10);
+        assert_eq!(ordered[0].title, "common first");
+        let old_id = ordered[1].id.clone();
+        fixture
+            .store
+            .finish_ocr(&crate::ocr::Completed {
+                id: old_id,
+                text: Ok("common scanned content".into()),
+            })
+            .unwrap();
+        assert_eq!(fixture.store.search("common", 10)[0].title, "common first");
+    }
+
+    #[test]
     fn civil_dates_include_epoch_and_leap_day() {
         assert_eq!(civil_from_days(0), (1970, 1, 1));
         assert_eq!(civil_from_days(19_782), (2024, 2, 29));

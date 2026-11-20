@@ -39,9 +39,25 @@ cargo run -- search "example"
 GUI test. Test the UI in a macOS Space, with synthetic clipboard fixtures and
 muted audio. Never copy real clipboard history into a shared test environment.
 
+## VM validation (2026-11-20)
+
+Tested an isolated debug app in `local:mac-for-desktop-testing`, with synthetic
+data and audio muted. The host app was not relaunched or replaced.
+
+- Vision recognized `BANANAS 4827` from a generated screenshot.
+- Searching `bananas` found that screenshot and showed the OCR text.
+- Quick Look rendered a text-file document preview.
+- Right arrow focused the preview: Select All and Copy returned the OCR text.
+- Left arrow returned to the search field.
+- The global hotkey reopened the panel from a separate TextEdit instance.
+- Enter pasted into TextEdit. Saving the result preserved the exact bytes
+  `    let answer = 42;\n\n`, including indentation and trailing newlines.
+
+Only the VM test app received a sandbox Accessibility grant. The host's
+permissions and hotkeys were not changed.
+
 ## Still required before replacing Raycast
 
-- Validate OCR and Quick Look in a macOS Space.
 - Verify rich clipboard formats and multi-file captures/paste.
 - Move capture, large-file writes and search off the main thread.
 - Add paging so browsing is not limited to the cached recent entries.
