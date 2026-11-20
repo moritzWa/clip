@@ -6,15 +6,16 @@ use block2::RcBlock;
 use global_hotkey::hotkey::{Code, HotKey, Modifiers};
 use global_hotkey::{GlobalHotKeyEvent, GlobalHotKeyManager, HotKeyState};
 use objc2::rc::Retained;
-use objc2::runtime::{NSObjectProtocol, ProtocolObject};
+use objc2::runtime::{AnyObject, NSObjectProtocol, ProtocolObject};
 use objc2::{AnyThread, DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send};
 use objc2_app_kit::{
     NSApplication, NSApplicationActivationOptions, NSApplicationActivationPolicy,
-    NSBackingStoreType, NSControlTextEditingDelegate, NSEvent, NSEventMask, NSImage, NSImageView,
-    NSPasteboard, NSPasteboardTypeFileURL, NSPasteboardTypePNG, NSPasteboardTypeString,
-    NSPasteboardTypeTIFF, NSRunningApplication, NSScreen, NSScrollView, NSSearchField,
-    NSTableColumn, NSTableView, NSTableViewDataSource, NSTableViewDelegate, NSTextField,
-    NSTextView, NSView, NSWindow, NSWindowStyleMask, NSWorkspace,
+    NSBackingStoreType, NSButton, NSControlTextEditingDelegate, NSEvent, NSEventMask,
+    NSGlassEffectView, NSImage, NSImageView, NSPasteboard, NSPasteboardTypeFileURL,
+    NSPasteboardTypePNG, NSPasteboardTypeString, NSPasteboardTypeTIFF, NSPopUpButton,
+    NSRunningApplication, NSScreen, NSScrollView, NSTableColumn, NSTableView,
+    NSTableViewDataSource, NSTableViewDelegate, NSTextField, NSTextView, NSView, NSWindow,
+    NSWindowDelegate, NSWindowStyleMask, NSWorkspace,
 };
 use objc2_foundation::NSURL;
 use objc2_foundation::{
@@ -22,6 +23,7 @@ use objc2_foundation::{
 };
 use objc2_quick_look_ui::{QLPreviewView, QLPreviewViewStyle};
 
+use crate::design::{self, rect};
 use crate::paste;
 use crate::store::{self, Hit, Store};
 
@@ -30,7 +32,24 @@ struct Ivars {
     rows: RefCell<Vec<Hit>>,
     recent: RefCell<Vec<Hit>>,
     query: RefCell<String>,
-    search: RefCell<Option<Retained<NSSearchField>>>,
+    search: RefCell<Option<Retained<NSTextField>>>,
+    surface: RefCell<Option<Retained<NSView>>>,
+    glass: RefCell<Option<Retained<NSGlassEffectView>>>,
+    back: RefCell<Option<Retained<NSButton>>>,
+    filter: RefCell<Option<Retained<NSPopUpButton>>>,
+    section: RefCell<Option<Retained<NSTextField>>>,
+    divider: RefCell<Option<Retained<NSView>>>,
+    info: RefCell<
+        Vec<(
+            Retained<NSView>,
+            Retained<NSTextField>,
+            Retained<NSTextField>,
+        )>,
+    >,
+    footer_left: RefCell<Option<Retained<NSGlassEffectView>>>,
+    footer_right: RefCell<Option<Retained<NSGlassEffectView>>>,
+    paste_button: RefCell<Option<Retained<NSButton>>>,
+    filter_index: Cell<isize>,
     table: RefCell<Option<Retained<NSTableView>>>,
     text: RefCell<Option<Retained<NSTextView>>>,
     image: RefCell<Option<Retained<NSImageView>>>,
@@ -57,6 +76,22 @@ define_class!(
     unsafe impl NSObjectProtocol for ClipPanel {}
     unsafe impl NSControlTextEditingDelegate for ClipPanel {}
 
+    unsafe impl NSWindowDelegate for ClipPanel {
+        #[unsafe(method(windowShouldClose:))]
+        fn should_close(&self, _: &NSWindow) -> bool {
+            self.hide_panel();
+            false
+        }
+        #[unsafe(method(windowDidResignKey:))]
+        fn resigned(&self, _: &objc2_foundation::NSNotification) {
+            self.hide_panel();
+        }
+        #[unsafe(method(windowDidResize:))]
+        fn resized(&self, _: &objc2_foundation::NSNotification) {
+            self.layout();
+        }
+    }
+
     unsafe impl NSTableViewDataSource for ClipPanel {
         #[unsafe(method(numberOfRowsInTableView:))]
         fn number_of_rows(&self, _: &NSTableView) -> NSInteger {
@@ -72,25 +107,18 @@ define_class!(
             _: Option<&NSTableColumn>,
             row: NSInteger,
         ) -> Option<Retained<NSView>> {
-            let title = self
+            let hit = self
                 .ivars()
                 .rows
                 .borrow()
                 .get(row as usize)
-                .map(|h| {
-                    let kind = match h.kind.as_str() {
-                        "image" => "img",
-                        "file" => "file",
-                        "link" => "link",
-                        _ => "text",
-                    };
-                    format!("{kind}   {}", h.title.replace('\n', " "))
-                })
-                .unwrap_or_default();
-            let label = NSTextField::labelWithString(&NSString::from_str(&title), self.mtm());
-            label.setFont(Some(&objc2_app_kit::NSFont::systemFontOfSize(16.0)));
-            label.setLineBreakMode(objc2_app_kit::NSLineBreakMode::ByTruncatingTail);
-            Some(unsafe { Retained::cast_unchecked(label) })
+                .cloned();
+            hit.map(|hit| design::cell(&hit.title, &hit.kind, self.mtm()))
+        }
+
+        #[unsafe(method_id(tableView:rowViewForRow:))]
+        fn row_view(&self, _: &NSTableView, _: NSInteger) -> Option<Retained<objc2_app_kit::NSTableRowView>> {
+            Some(unsafe { Retained::cast_unchecked(design::ClipRow::new(self.mtm())) })
         }
 
         #[unsafe(method(tableViewSelectionDidChange:))]
@@ -100,6 +128,23 @@ define_class!(
     }
 
     impl ClipPanel {
+        #[unsafe(method(canBecomeKeyWindow))]
+        fn can_become_key(&self) -> bool { true }
+
+        #[unsafe(method(canBecomeMainWindow))]
+        fn can_become_main(&self) -> bool { true }
+
+        #[unsafe(method(pasteSelected:))]
+        fn paste_action(&self, _: &AnyObject) { self.paste_selected(); }
+
+        #[unsafe(method(hidePanel:))]
+        fn hide_action(&self, _: &AnyObject) { self.hide_panel(); }
+
+        #[unsafe(method(filterChanged:))]
+        fn filter_changed(&self, sender: &NSPopUpButton) {
+            self.ivars().filter_index.set(sender.indexOfSelectedItem());
+            self.refresh_results();
+        }
         #[unsafe(method(tick:))]
         fn tick(&self, _: &NSTimer) {
             self.poll_hotkey();
@@ -123,17 +168,25 @@ impl ClipPanel {
     fn new(mtm: MainThreadMarker, store: Store) -> Retained<Self> {
         let recent = store.recent(200);
         let rows = recent.clone();
-        let frame = NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(920.0, 560.0));
-        let style = NSWindowStyleMask::Titled
-            | NSWindowStyleMask::Closable
-            | NSWindowStyleMask::Resizable
-            | NSWindowStyleMask::FullSizeContentView;
+        let frame = rect(0.0, 0.0, design::WIDTH, design::HEIGHT);
+        let style = NSWindowStyleMask::Borderless;
         let this = mtm.alloc().set_ivars(Ivars {
             store: RefCell::new(store),
             rows: RefCell::new(rows),
             recent: RefCell::new(recent),
             query: RefCell::new(String::new()),
             search: RefCell::new(None),
+            surface: RefCell::new(None),
+            glass: RefCell::new(None),
+            back: RefCell::new(None),
+            filter: RefCell::new(None),
+            section: RefCell::new(None),
+            divider: RefCell::new(None),
+            info: RefCell::new(Vec::new()),
+            footer_left: RefCell::new(None),
+            footer_right: RefCell::new(None),
+            paste_button: RefCell::new(None),
+            filter_index: Cell::new(0),
             table: RefCell::new(None),
             text: RefCell::new(None),
             image: RefCell::new(None),
@@ -160,8 +213,12 @@ impl ClipPanel {
             ]
         };
         this.setTitle(ns_string!("Clip"));
-        this.setTitleVisibility(objc2_app_kit::NSWindowTitleVisibility::Hidden);
-        this.setTitlebarAppearsTransparent(true);
+        this.setOpaque(false);
+        this.setBackgroundColor(Some(&objc2_app_kit::NSColor::clearColor()));
+        this.setHasShadow(true);
+        unsafe {
+            this.setReleasedWhenClosed(false);
+        }
         this.setMovableByWindowBackground(true);
         for button in [
             objc2_app_kit::NSWindowButton::CloseButton,
@@ -174,20 +231,72 @@ impl ClipPanel {
         }
         this.setLevel(objc2_app_kit::NSFloatingWindowLevel + 1);
         this.build_views(mtm);
+        this.setDelegate(Some(ProtocolObject::from_ref(&*this)));
         let pb = NSPasteboard::generalPasteboard();
         this.ivars().last_change.set(pb.changeCount());
         this
     }
 
     fn build_views(&self, mtm: MainThreadMarker) {
-        let content = self.contentView().expect("content");
-        let search = NSSearchField::initWithFrame(
-            NSSearchField::alloc(mtm),
-            NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(10.0, 10.0)),
+        let glass = design::glass(
+            rect(0.0, 0.0, design::WIDTH, design::HEIGHT),
+            design::RADIUS,
+            mtm,
         );
-        search.setPlaceholderString(Some(ns_string!("Type to filter")));
-        search.setFont(Some(&objc2_app_kit::NSFont::systemFontOfSize(18.0)));
+        // The window backing must follow the glass silhouette, not its square bounds.
+        design::rounded(
+            &glass,
+            design::RADIUS,
+            &objc2_app_kit::NSColor::clearColor(),
+        );
+        let content = NSView::initWithFrame(NSView::alloc(mtm), glass.bounds());
+        glass.setContentView(Some(&content));
+        self.setContentView(Some(&glass));
+        *self.ivars().glass.borrow_mut() = Some(glass);
+        *self.ivars().surface.borrow_mut() = Some(content.clone());
+        let back = NSButton::initWithFrame(NSButton::alloc(mtm), rect(0.0, 0.0, 28.0, 28.0));
+        back.setBordered(false);
+        back.setTitle(ns_string!(""));
+        back.setImage(design::symbol("chevron.left").as_deref());
+        unsafe {
+            back.setTarget(Some(self));
+            back.setAction(Some(objc2::sel!(hidePanel:)));
+        }
+        content.addSubview(&back);
+        let search =
+            NSTextField::initWithFrame(NSTextField::alloc(mtm), rect(0.0, 0.0, 10.0, 10.0));
+        search.setPlaceholderString(Some(ns_string!("Type to filter entries…")));
+        search.setFont(Some(&objc2_app_kit::NSFont::systemFontOfSize(19.0)));
+        search.setBezeled(false);
+        search.setBordered(false);
+        search.setDrawsBackground(false);
+        search.setFocusRingType(objc2_app_kit::NSFocusRingType::None);
         content.addSubview(&search);
+        let filter = NSPopUpButton::initWithFrame_pullsDown(
+            NSPopUpButton::alloc(mtm),
+            rect(0.0, 0.0, 110.0, 28.0),
+            false,
+        );
+        filter.setBordered(false);
+        filter.setFont(Some(&objc2_app_kit::NSFont::systemFontOfSize(14.0)));
+        for title in ["All Types", "Text", "Links", "Images", "Files"] {
+            filter.addItemWithTitle(&NSString::from_str(title));
+        }
+        unsafe {
+            filter.setTarget(Some(self));
+            filter.setAction(Some(objc2::sel!(filterChanged:)));
+        }
+        content.addSubview(&filter);
+        let section = design::label("Recent", 12.0, mtm);
+        section.setTextColor(Some(&objc2_app_kit::NSColor::secondaryLabelColor()));
+        content.addSubview(&section);
+        let divider = NSView::initWithFrame(NSView::alloc(mtm), rect(0.0, 0.0, 0.5, 10.0));
+        design::rounded(
+            &divider,
+            0.0,
+            &objc2_app_kit::NSColor::labelColor().colorWithAlphaComponent(0.055),
+        );
+        content.addSubview(&divider);
 
         let table = NSTableView::initWithFrame(
             NSTableView::alloc(mtm),
@@ -197,18 +306,17 @@ impl ClipPanel {
             NSTableColumn::initWithIdentifier(NSTableColumn::alloc(mtm), ns_string!("main"));
         table.addTableColumn(&column);
         table.setHeaderView(None);
-        table.setRowHeight(42.0);
+        table.setRowHeight(design::ROW);
+        table.setIntercellSpacing(NSSize::new(0.0, 0.0));
+        table.setBackgroundColor(&objc2_app_kit::NSColor::clearColor());
+        table.setStyle(objc2_app_kit::NSTableViewStyle::Plain);
+        table.setFocusRingType(objc2_app_kit::NSFocusRingType::None);
         unsafe {
             let src = ProtocolObject::from_ref(self);
             table.setDataSource(Some(src));
             table.setDelegate(Some(ProtocolObject::from_ref(self)));
         }
-        let list_scroll = NSScrollView::initWithFrame(
-            NSScrollView::alloc(mtm),
-            NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(10.0, 10.0)),
-        );
-        list_scroll.setHasVerticalScroller(true);
-        list_scroll.setDocumentView(Some(&table));
+        let list_scroll = design::scroll(&table, mtm);
         content.addSubview(&list_scroll);
 
         let text = NSTextView::initWithFrame(
@@ -218,17 +326,15 @@ impl ClipPanel {
         text.setEditable(false);
         text.setSelectable(true);
         text.setRichText(false);
+        text.setDrawsBackground(false);
+        text.setTextColor(Some(&objc2_app_kit::NSColor::labelColor()));
+        text.setTextContainerInset(NSSize::new(6.0, 6.0));
         text.setFont(Some(
             &objc2_app_kit::NSFont::monospacedSystemFontOfSize_weight(14.0, unsafe {
                 objc2_app_kit::NSFontWeightRegular
             }),
         ));
-        let text_scroll = NSScrollView::initWithFrame(
-            NSScrollView::alloc(mtm),
-            NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(10.0, 10.0)),
-        );
-        text_scroll.setHasVerticalScroller(true);
-        text_scroll.setDocumentView(Some(&text));
+        let text_scroll = design::scroll(&text, mtm);
         content.addSubview(&text_scroll);
 
         let image = NSImageView::initWithFrame(
@@ -252,9 +358,59 @@ impl ClipPanel {
             view
         };
 
-        let meta = NSTextField::labelWithString(ns_string!(""), mtm);
+        let meta = design::label("Information", 12.0, mtm);
         meta.setTextColor(Some(&objc2_app_kit::NSColor::secondaryLabelColor()));
         content.addSubview(&meta);
+
+        let mut info = Vec::new();
+        for index in 0..5 {
+            let row = NSView::initWithFrame(NSView::alloc(mtm), rect(0.0, 0.0, 10.0, 28.0));
+            if index % 2 == 0 {
+                design::rounded(
+                    &row,
+                    8.0,
+                    &objc2_app_kit::NSColor::labelColor().colorWithAlphaComponent(0.035),
+                );
+            }
+            let key = design::label("", 12.0, mtm);
+            key.setTextColor(Some(&objc2_app_kit::NSColor::secondaryLabelColor()));
+            let value = design::label("", 12.0, mtm);
+            value.setAlignment(objc2_app_kit::NSTextAlignment::Right);
+            row.addSubview(&key);
+            row.addSubview(&value);
+            content.addSubview(&row);
+            info.push((row, key, value));
+        }
+        *self.ivars().info.borrow_mut() = info;
+        let footer_left = design::glass(rect(0.0, 0.0, 126.0, 35.0), 17.5, mtm);
+        let left_content = NSView::initWithFrame(NSView::alloc(mtm), rect(0.0, 0.0, 126.0, 35.0));
+        let icon = NSImageView::initWithFrame(NSImageView::alloc(mtm), rect(12.0, 8.0, 19.0, 19.0));
+        icon.setImage(design::symbol("doc.on.clipboard").as_deref());
+        left_content.addSubview(&icon);
+        let name = design::label("Clipboard", 13.0, mtm);
+        name.setFrame(rect(40.0, 9.0, 78.0, 18.0));
+        left_content.addSubview(&name);
+        footer_left.setContentView(Some(&left_content));
+        content.addSubview(&footer_left);
+        let footer_right = design::glass(rect(0.0, 0.0, 242.0, 35.0), 17.5, mtm);
+        let paste_button =
+            NSButton::initWithFrame(NSButton::alloc(mtm), rect(0.0, 0.0, 242.0, 35.0));
+        paste_button.setBordered(false);
+        paste_button.setTitle(ns_string!("Paste to previous app    ↩"));
+        paste_button.setFont(Some(&objc2_app_kit::NSFont::systemFontOfSize(13.0)));
+        unsafe {
+            paste_button.setTarget(Some(self));
+            paste_button.setAction(Some(objc2::sel!(pasteSelected:)));
+        }
+        footer_right.setContentView(Some(&paste_button));
+        content.addSubview(&footer_right);
+        *self.ivars().back.borrow_mut() = Some(back);
+        *self.ivars().filter.borrow_mut() = Some(filter);
+        *self.ivars().section.borrow_mut() = Some(section);
+        *self.ivars().divider.borrow_mut() = Some(divider);
+        *self.ivars().footer_left.borrow_mut() = Some(footer_left);
+        *self.ivars().footer_right.borrow_mut() = Some(footer_right);
+        *self.ivars().paste_button.borrow_mut() = Some(paste_button);
 
         *self.ivars().search.borrow_mut() = Some(search);
         *self.ivars().table.borrow_mut() = Some(table);
@@ -272,35 +428,64 @@ impl ClipPanel {
         let bounds = self.contentView().expect("content").bounds();
         let w = bounds.size.width;
         let h = bounds.size.height;
-        let pad = 10.0;
-        let search_h = 28.0;
-        let meta_h = 22.0;
-        let list_w = 320.0;
-        if let Some(search) = self.ivars().search.borrow().as_ref() {
-            search.setFrame(NSRect::new(
-                NSPoint::new(pad, h - pad - search_h - 8.0),
-                NSSize::new(w - pad * 2.0, search_h),
+        let pad = 16.0;
+        let meta_h = 164.0;
+        let list_w = design::LIST_WIDTH;
+        if let Some(back) = self.ivars().back.borrow().as_ref() {
+            back.setFrame(rect(12.0, h - 44.0, 28.0, 28.0));
+        }
+        if let Some(filter) = self.ivars().filter.borrow().as_ref() {
+            filter.setFrame(rect(w - 130.0, h - 43.0, 114.0, 28.0));
+        }
+        if let Some(section) = self.ivars().section.borrow().as_ref() {
+            section.setFrame(rect(20.0, h - design::HEADER - 22.0, list_w - 40.0, 18.0));
+        }
+        if let Some(divider) = self.ivars().divider.borrow().as_ref() {
+            divider.setFrame(rect(
+                list_w,
+                design::FOOTER,
+                0.5,
+                h - design::HEADER - design::FOOTER,
             ));
         }
-        let body_top = h - pad - search_h - 16.0;
-        let body_h = (body_top - pad).max(40.0);
+        if let Some(footer) = self.ivars().footer_left.borrow().as_ref() {
+            footer.setFrame(rect(12.0, 9.0, 126.0, 35.0));
+        }
+        if let Some(footer) = self.ivars().footer_right.borrow().as_ref() {
+            footer.setFrame(rect(w - 254.0, 9.0, 242.0, 35.0));
+        }
+        if let Some(search) = self.ivars().search.borrow().as_ref() {
+            search.setFrame(rect(48.0, h - 44.0, w - 188.0, 28.0));
+        }
+        let body_top = h - design::HEADER - 30.0;
+        let body_h = body_top - design::FOOTER;
         if let Some(list) = self.ivars().list_scroll.borrow().as_ref() {
             list.setFrame(NSRect::new(
-                NSPoint::new(pad, pad),
-                NSSize::new(list_w, body_h),
+                NSPoint::new(8.0, design::FOOTER),
+                NSSize::new(list_w - 16.0, body_h),
             ));
         }
-        let preview_x = pad + list_w + 8.0;
+        let preview_x = list_w + pad;
         let preview_w = (w - preview_x - pad).max(40.0);
         if let Some(meta) = self.ivars().meta.borrow().as_ref() {
             meta.setFrame(NSRect::new(
-                NSPoint::new(preview_x, pad),
-                NSSize::new(preview_w, meta_h),
+                NSPoint::new(preview_x, design::FOOTER + 146.0),
+                NSSize::new(preview_w, 18.0),
             ));
         }
-        let preview_h = (body_h - meta_h - 6.0).max(40.0);
+        for (i, (row, key, value)) in self.ivars().info.borrow().iter().enumerate() {
+            row.setFrame(rect(
+                preview_x,
+                design::FOOTER + (4 - i) as f64 * 28.0,
+                preview_w,
+                28.0,
+            ));
+            key.setFrame(rect(10.0, 6.0, 105.0, 17.0));
+            value.setFrame(rect(120.0, 6.0, preview_w - 130.0, 17.0));
+        }
+        let preview_h = (h - design::HEADER - design::FOOTER - meta_h - 14.0).max(40.0);
         let image_fraction = if self.ivars().preview_kind.get() == 1 {
-            0.65
+            0.75
         } else {
             0.0
         };
@@ -308,20 +493,20 @@ impl ClipPanel {
             image.setFrame(NSRect::new(
                 NSPoint::new(
                     preview_x,
-                    pad + meta_h + 6.0 + preview_h * (1.0 - image_fraction),
+                    design::FOOTER + meta_h + 6.0 + preview_h * (1.0 - image_fraction),
                 ),
                 NSSize::new(preview_w, preview_h * image_fraction),
             ));
         }
         if let Some(text) = self.ivars().text_scroll.borrow().as_ref() {
             text.setFrame(NSRect::new(
-                NSPoint::new(preview_x, pad + meta_h + 6.0),
+                NSPoint::new(preview_x, design::FOOTER + meta_h + 6.0),
                 NSSize::new(preview_w, preview_h * (1.0 - image_fraction)),
             ));
         }
         if let Some(document) = self.ivars().document.borrow().as_ref() {
             document.setFrame(NSRect::new(
-                NSPoint::new(preview_x, pad + meta_h + 6.0),
+                NSPoint::new(preview_x, design::FOOTER + meta_h + 6.0),
                 NSSize::new(preview_w, preview_h),
             ));
         }
@@ -330,10 +515,17 @@ impl ClipPanel {
     fn show_panel(&self) {
         if let Some(app) = NSWorkspace::sharedWorkspace().frontmostApplication() {
             self.ivars().prev_pid.set(app.processIdentifier());
+            if let Some(button) = self.ivars().paste_button.borrow().as_ref() {
+                let name = app
+                    .localizedName()
+                    .map(|s| s.to_string())
+                    .unwrap_or_else(|| "previous app".into());
+                button.setTitle(&NSString::from_str(&format!("Paste to {name}    ↩")));
+            }
         }
         if let Some(screen) = NSScreen::mainScreen(self.mtm()) {
             let vis = screen.visibleFrame();
-            let size = NSSize::new(920.0, 560.0);
+            let size = NSSize::new(design::WIDTH, design::HEIGHT);
             self.setFrame_display(
                 NSRect::new(
                     NSPoint::new(
@@ -379,12 +571,34 @@ impl ClipPanel {
             return;
         }
         *self.ivars().query.borrow_mut() = text.clone();
+        self.refresh_results();
+    }
+
+    fn refresh_results(&self) {
+        let text = self.ivars().query.borrow().clone();
         let hits = if text.trim().is_empty() {
             self.ivars().recent.borrow().clone()
         } else {
             self.ivars().store.borrow().search(&text, 80)
         };
-        *self.ivars().rows.borrow_mut() = hits;
+        let kind = match self.ivars().filter_index.get() {
+            1 => Some("text"),
+            2 => Some("link"),
+            3 => Some("image"),
+            4 => Some("file"),
+            _ => None,
+        };
+        *self.ivars().rows.borrow_mut() = hits
+            .into_iter()
+            .filter(|hit| kind.is_none_or(|k| hit.kind == k))
+            .collect();
+        if let Some(section) = self.ivars().section.borrow().as_ref() {
+            section.setStringValue(if text.trim().is_empty() {
+                ns_string!("Recent")
+            } else {
+                ns_string!("Results")
+            });
+        }
         if let Some(table) = self.ivars().table.borrow().as_ref() {
             table.reloadData();
         }
@@ -462,13 +676,45 @@ impl ClipPanel {
             .map(|h| h.id.clone());
         let Some(id) = id else {
             if let Some(text) = self.ivars().text.borrow().as_ref() {
-                text.setString(ns_string!(""));
+                text.setString(ns_string!("No matching entries"));
             }
+            if let Some(image) = self.ivars().image.borrow().as_ref() {
+                image.setImage(None);
+                image.setHidden(true);
+            }
+            if let Some(document) = self.ivars().document.borrow().as_ref() {
+                document.setHidden(true);
+            }
+            if let Some(scroll) = self.ivars().text_scroll.borrow().as_ref() {
+                scroll.setHidden(false);
+            }
+            for (row, key, value) in self.ivars().info.borrow().iter() {
+                row.setHidden(true);
+                key.setStringValue(ns_string!(""));
+                value.setStringValue(ns_string!(""));
+            }
+            if let Some(meta) = self.ivars().meta.borrow().as_ref() {
+                meta.setHidden(true);
+            }
+            if let Some(button) = self.ivars().paste_button.borrow().as_ref() {
+                button.setEnabled(false);
+            }
+            self.ivars().preview_kind.set(0);
+            self.layout();
             return;
         };
         let Some(preview) = self.ivars().store.borrow().preview(&id) else {
             return;
         };
+        if let Some(meta) = self.ivars().meta.borrow().as_ref() {
+            meta.setHidden(false);
+        }
+        if let Some(button) = self.ivars().paste_button.borrow().as_ref() {
+            button.setEnabled(true);
+        }
+        for (row, _, _) in self.ivars().info.borrow().iter() {
+            row.setHidden(false);
+        }
         let is_document = preview.file_path.as_ref().is_some_and(|p| p.exists())
             && self.ivars().document.borrow().is_some();
         self.ivars().preview_kind.set(if is_document {
@@ -517,18 +763,22 @@ impl ClipPanel {
                 image.setHidden(true);
             }
         }
-        if let Some(meta) = self.ivars().meta.borrow().as_ref() {
-            let size = preview
-                .bytes
-                .map(|n| format!("   {n} bytes"))
-                .unwrap_or_default();
-            let line = format!(
-                "{}   {}   {}{size}",
-                preview.source,
-                preview.kind,
-                store::format_when(&preview.created_at)
-            );
-            meta.setStringValue(&NSString::from_str(&line));
+        let values = [
+            ("Source", preview.source.clone()),
+            ("Type", preview.kind.clone()),
+            ("Copied", store::format_when(&preview.created_at)),
+            ("Characters", preview.text.chars().count().to_string()),
+            (
+                "Size",
+                preview
+                    .bytes
+                    .map(|n| format!("{n} bytes"))
+                    .unwrap_or_else(|| format!("{} bytes", preview.text.len())),
+            ),
+        ];
+        for ((_, key, value), (name, data)) in self.ivars().info.borrow().iter().zip(values) {
+            key.setStringValue(&NSString::from_str(name));
+            value.setStringValue(&NSString::from_str(&data));
         }
     }
 
@@ -647,12 +897,10 @@ impl ClipPanel {
         } else {
             Some(source)
         };
-        let mut inserted = false;
         if let Some(text) = pb.stringForType(unsafe { NSPasteboardTypeString }) {
             let text = text.to_string();
             if !text.is_empty() && !text.starts_with("file://") {
-                inserted = self
-                    .ivars()
+                self.ivars()
                     .store
                     .borrow_mut()
                     .insert_text(&text, source.as_deref());
@@ -667,32 +915,24 @@ impl ClipPanel {
             } else {
                 "tiff"
             };
-            inserted = self.ivars().store.borrow_mut().insert_image(
-                &data.to_vec(),
-                ext,
-                source.as_deref(),
-            ) || inserted;
+            self.ivars()
+                .store
+                .borrow_mut()
+                .insert_image(&data.to_vec(), ext, source.as_deref());
         }
         if let Some(file) = pb.stringForType(unsafe { NSPasteboardTypeFileURL }) {
             let path = file.to_string().trim_start_matches("file://").to_string();
             let path = percent_decode(&path);
-            inserted = self
-                .ivars()
+            self.ivars()
                 .store
                 .borrow_mut()
-                .insert_file(std::path::Path::new(&path), source.as_deref())
-                || inserted;
+                .insert_file(std::path::Path::new(&path), source.as_deref());
         }
         // A duplicate also changes its recency.
         {
             let recent = self.ivars().store.borrow().recent(200);
             *self.ivars().recent.borrow_mut() = recent;
-            if self.ivars().query.borrow().trim().is_empty() {
-                *self.ivars().rows.borrow_mut() = self.ivars().recent.borrow().clone();
-                if let Some(table) = self.ivars().table.borrow().as_ref() {
-                    table.reloadData();
-                }
-            }
+            self.refresh_results();
         }
     }
 
@@ -815,13 +1055,17 @@ pub fn run() {
     let panel = ClipPanel::new(mtm, store);
 
     let manager = GlobalHotKeyManager::new().expect("hotkey");
-    // Cmd+Shift+U on ADNW is physical W. Cmd+U stays on Raycast until this replaces it.
+    // Karabiner maps only left Cmd+U to this internal chord on DeutschADNW.
     let hotkey = HotKey::new(Some(Modifiers::META | Modifiers::SHIFT), Code::KeyW);
     manager.register(hotkey).expect("register hotkey");
     std::mem::forget(manager);
     eprintln!(
         "clip: Cmd+Shift+U opens it. paste keycode {}",
         paste::paste_keycode()
+    );
+    eprintln!(
+        "clip: Accessibility trusted: {}",
+        paste::accessibility_trusted()
     );
 
     let panel_for_keys = panel.clone();

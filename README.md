@@ -4,29 +4,57 @@ A local macOS clipboard manager in Rust, using AppKit directly through `objc2`.
 SQLite FTS5 indexes text and screenshot OCR. No webview, network service, expiry,
 or application-level encryption.
 
-## Prototype controls
+## Controls
 
 - Cmd+Shift+U: open/hide (physical W on DeutschADNW).
+- On Moritz's Mac, Karabiner maps only left Cmd+U to that internal chord.
 - Up/down: select a clip.
 - Right: focus the preview. Left: return to search.
 - Enter: copy the selected item and paste into the previous application.
 - Escape: hide.
 
-Cmd+U remains assigned to Raycast. Automatic paste requires macOS Accessibility
-permission. The current prototype does not install itself or start at login.
+Raycast's previous shortcut was removed manually. Automatic paste requires macOS
+Accessibility permission for Clip.app. Without it, Enter still copies the item.
+
+The borderless 750×475-point panel uses native macOS glass, a 26-point outer
+radius, 38-point list rows, separate preview/information areas and glass footer
+capsules. Type filters apply to the current result set (not the entire database).
 
 ## Storage
 
 Data lives under `~/Library/Application Support/Clip/`, never in this repository.
 The source uses `history.db`, taking a consistent SQLite backup of the recovered
-`import/history.db` on first use. The old running prototype still uses the import
-directly. Images are separate files. The initial import contains
+`import/history.db` on first use. Images are separate files. The initial import contains
 1,100 entries and the OCR text Raycast had already generated.
 
 The source now includes a bounded, single-worker Vision OCR queue, native Quick
 Look document previews with autoplay disabled, transaction-protected writes,
 whitespace-preserving text capture, and collision-resistant IDs. These changes
-are not yet loaded into the running prototype.
+are included in the packaged build.
+
+## Local installation
+
+```sh
+cargo build
+sh scripts/install.sh "$PWD/target/debug/clip"
+```
+
+This installs `~/Applications/Clip.app` (stable ID `com.moritz.clip`, ad-hoc signed)
+and a per-user launch agent. It launches hidden, starts at login, and restarts if
+the process exits. Existing bundles are preserved as timestamped backups. It
+does not change Accessibility permissions or keyboard settings. Enable Clip in
+System Settings → Privacy & Security → Accessibility to allow automatic paste.
+
+Logs are private files under `~/Library/Logs/Clip/`, including panic backtraces,
+startup PID and Accessibility status, never clipboard contents. To stop it:
+
+```sh
+launchctl bootout "gui/$(id -u)/com.moritz.clip"
+```
+
+The old prototype exited without a retained stderr log or macOS crash report;
+its original exit cause is unknown. The installed app is independent of the
+agent session's shell lifecycle.
 
 ## Development
 
@@ -53,17 +81,22 @@ data and audio muted. The host app was not relaunched or replaced.
 - Enter pasted into TextEdit. Saving the result preserved the exact bytes
   `    let answer = 42;\n\n`, including indentation and trailing newlines.
 
-Only the VM test app received a sandbox Accessibility grant. The host's
-permissions and hotkeys were not changed.
+The redesigned build was also tested with synthetic data: OCR search and
+preview Select All/Copy, image type filtering, empty results, repeated hotkey
+hide/show, and paste through both Enter and the footer button. Saved TextEdit
+output matched the exact whitespace fixture. Native Quick Look was checked
+separately. Packaging and hidden launch were tested through the installer;
+launchd restarted the process after deliberate termination. No new host GUI
+automation was used. Only VM test apps received automated Accessibility grants.
 
 ## Still required before replacing Raycast
 
 - Verify rich clipboard formats and multi-file captures/paste.
 - Move capture, large-file writes and search off the main thread.
 - Add paging so browsing is not limited to the cached recent entries.
-- Benchmark opening/search against large synthetic histories.
-- Package a signed app, permissions UX and a login item.
-- Add type filters and search highlighting. Time-range filters are backlogged.
+- Benchmark UI opening/search against large synthetic histories.
+- Developer ID signing, notarization and in-app permissions UX.
+- Database-wide type filtering and search highlighting. Time-range filters are backlogged.
 
 ## Measured storage performance
 

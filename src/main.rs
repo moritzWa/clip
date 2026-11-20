@@ -1,9 +1,16 @@
+mod design;
 mod ocr;
 mod paste;
 mod store;
 mod ui;
 
 fn main() {
+    // launchd retains stderr, including panics. Never log clipboard content.
+    eprintln!(
+        "clip: starting {} (pid {})",
+        env!("CARGO_PKG_VERSION"),
+        std::process::id()
+    );
     let mut args = std::env::args().skip(1);
     if args.next().as_deref() == Some("search") {
         let query = args.collect::<Vec<_>>().join(" ");

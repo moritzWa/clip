@@ -1,5 +1,14 @@
 use std::ffi::c_void;
 
+pub fn accessibility_trusted() -> bool {
+    unsafe { AXIsProcessTrusted() }
+}
+
+#[link(name = "ApplicationServices", kind = "framework")]
+unsafe extern "C" {
+    fn AXIsProcessTrusted() -> bool;
+}
+
 /// Keycode whose unmodified output is `v` in the current layout.
 /// ADNW maps that to physical Y, not V. Posting physical V pastes a comma.
 pub fn paste_keycode() -> u16 {
@@ -7,6 +16,10 @@ pub fn paste_keycode() -> u16 {
 }
 
 pub fn post_paste() {
+    if !accessibility_trusted() {
+        eprintln!("clip: item copied; automatic paste needs Accessibility permission for Clip.app");
+        return;
+    }
     let code = paste_keycode();
     unsafe {
         let down = CGEventCreateKeyboardEvent(std::ptr::null_mut(), code, true);
