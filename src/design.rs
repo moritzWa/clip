@@ -13,6 +13,15 @@ pub const FOOTER: f64 = 52.0;
 pub const ROW: f64 = 38.0;
 pub const LIST_WIDTH: f64 = 280.0;
 
+pub fn expanded_preview_frame(width: f64, height: f64) -> NSRect {
+    rect(
+        16.0,
+        FOOTER + 8.0,
+        width - 32.0,
+        height - HEADER - FOOTER - 16.0,
+    )
+}
+
 pub fn rect(x: f64, y: f64, w: f64, h: f64) -> NSRect {
     NSRect::new(NSPoint::new(x, y), NSSize::new(w.max(0.0), h.max(0.0)))
 }
@@ -122,5 +131,15 @@ mod tests {
         assert!(WIDTH - LIST_WIDTH - 32.0 > 400.0);
         // Footer capsules have height 35 and a matching 17.5pt radius.
         assert_eq!(35.0 / 2.0, 17.5);
+    }
+
+    #[test]
+    fn expanded_preview_uses_both_columns_without_covering_controls() {
+        let frame = expanded_preview_frame(WIDTH, HEIGHT);
+        assert_eq!(frame.origin.x, 16.0);
+        assert_eq!(frame.size.width, 718.0);
+        assert_eq!(frame.size.height, 349.0);
+        assert!(frame.origin.y > FOOTER);
+        assert!(frame.origin.y + frame.size.height < HEIGHT - HEADER);
     }
 }

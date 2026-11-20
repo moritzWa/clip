@@ -9,9 +9,9 @@ or application-level encryption.
 - Cmd+Shift+U: open/hide (physical W on DeutschADNW).
 - On Moritz's Mac, Karabiner maps only left Cmd+U to that internal chord.
 - Up/down: select a clip.
-- Right: focus the preview. Left: return to search.
+- Right: open a full-width image, document or selectable text preview.
+- Left: return to the list. Escape returns from a preview, then hides the panel.
 - Enter: copy the selected item and paste into the previous application.
-- Escape: hide.
 
 Raycast's previous shortcut was removed manually. Automatic paste requires macOS
 Accessibility permission for Clip.app. Without it, Enter still copies the item.
@@ -19,6 +19,9 @@ Accessibility permission for Clip.app. Without it, Enter still copies the item.
 The borderless 750×475-point panel uses native macOS glass, a 26-point outer
 radius, 38-point list rows, separate preview/information areas and glass footer
 capsules. Type filters apply to the current result set (not the entire database).
+Full previews preserve the query and selected row when returning to the list.
+The expanded image and Quick Look document routes, Left/Escape return paths,
+and retained query/selection were visually verified in the macOS VM.
 
 ## Storage
 

@@ -33,6 +33,7 @@ struct Ivars {
     recent: RefCell<Vec<Hit>>,
     query: RefCell<String>,
     search: RefCell<Option<Retained<NSTextField>>>,
+    preview_title: RefCell<Option<Retained<NSTextField>>>,
     surface: RefCell<Option<Retained<NSView>>>,
     glass: RefCell<Option<Retained<NSGlassEffectView>>>,
     back: RefCell<Option<Retained<NSButton>>>,
@@ -138,7 +139,9 @@ define_class!(
         fn paste_action(&self, _: &AnyObject) { self.paste_selected(); }
 
         #[unsafe(method(hidePanel:))]
-        fn hide_action(&self, _: &AnyObject) { self.hide_panel(); }
+        fn hide_action(&self, _: &AnyObject) {
+            if self.ivars().previewing.get() { self.focus_search(); } else { self.hide_panel(); }
+        }
 
         #[unsafe(method(filterChanged:))]
         fn filter_changed(&self, sender: &NSPopUpButton) {
@@ -176,6 +179,7 @@ impl ClipPanel {
             recent: RefCell::new(recent),
             query: RefCell::new(String::new()),
             search: RefCell::new(None),
+            preview_title: RefCell::new(None),
             surface: RefCell::new(None),
             glass: RefCell::new(None),
             back: RefCell::new(None),
@@ -272,6 +276,10 @@ impl ClipPanel {
         search.setDrawsBackground(false);
         search.setFocusRingType(objc2_app_kit::NSFocusRingType::None);
         content.addSubview(&search);
+        let preview_title = design::label("Preview", 19.0, mtm);
+        preview_title.setHidden(true);
+        content.addSubview(&preview_title);
+        *self.ivars().preview_title.borrow_mut() = Some(preview_title);
         let filter = NSPopUpButton::initWithFrame_pullsDown(
             NSPopUpButton::alloc(mtm),
             rect(0.0, 0.0, 110.0, 28.0),
@@ -428,6 +436,39 @@ impl ClipPanel {
         let bounds = self.contentView().expect("content").bounds();
         let w = bounds.size.width;
         let h = bounds.size.height;
+        let expanded = self.ivars().previewing.get();
+        let has_selection = !self.ivars().rows.borrow().is_empty();
+        if let Some(search) = self.ivars().search.borrow().as_ref() {
+            search.setHidden(expanded);
+        }
+        if let Some(title) = self.ivars().preview_title.borrow().as_ref() {
+            title.setHidden(!expanded);
+            title.setFrame(rect(48.0, h - 44.0, w - 72.0, 28.0));
+        }
+        if let Some(filter) = self.ivars().filter.borrow().as_ref() {
+            filter.setHidden(expanded);
+        }
+        if let Some(section) = self.ivars().section.borrow().as_ref() {
+            section.setHidden(expanded);
+        }
+        if let Some(list) = self.ivars().list_scroll.borrow().as_ref() {
+            list.setHidden(expanded);
+        }
+        if let Some(divider) = self.ivars().divider.borrow().as_ref() {
+            divider.setHidden(expanded);
+        }
+        if let Some(meta) = self.ivars().meta.borrow().as_ref() {
+            meta.setHidden(expanded || !has_selection);
+        }
+        for (row, _, _) in self.ivars().info.borrow().iter() {
+            row.setHidden(expanded || !has_selection);
+        }
+        if let Some(text) = self.ivars().text_scroll.borrow().as_ref() {
+            text.setHidden(
+                self.ivars().preview_kind.get() == 2
+                    || (expanded && self.ivars().preview_kind.get() == 1),
+            );
+        }
         let pad = 16.0;
         let meta_h = 164.0;
         let list_w = design::LIST_WIDTH;
@@ -510,9 +551,22 @@ impl ClipPanel {
                 NSSize::new(preview_w, preview_h),
             ));
         }
+        if expanded {
+            let frame = design::expanded_preview_frame(w, h);
+            if let Some(image) = self.ivars().image.borrow().as_ref() {
+                image.setFrame(frame);
+            }
+            if let Some(document) = self.ivars().document.borrow().as_ref() {
+                document.setFrame(frame);
+            }
+            if let Some(text) = self.ivars().text_scroll.borrow().as_ref() {
+                text.setFrame(frame);
+            }
+        }
     }
 
     fn show_panel(&self) {
+        self.ivars().previewing.set(false);
         if let Some(app) = NSWorkspace::sharedWorkspace().frontmostApplication() {
             self.ivars().prev_pid.set(app.processIdentifier());
             if let Some(button) = self.ivars().paste_button.borrow().as_ref() {
@@ -543,7 +597,6 @@ impl ClipPanel {
         if let Some(search) = self.ivars().search.borrow().as_ref() {
             self.makeFirstResponder(Some(search));
         }
-        self.ivars().previewing.set(false);
     }
 
     fn hide_panel(&self) {
@@ -795,7 +848,22 @@ impl ClipPanel {
     }
 
     fn focus_preview(&self) {
+        if self.ivars().previewing.get() || self.ivars().rows.borrow().is_empty() {
+            return;
+        }
+        if let Some(table) = self.ivars().table.borrow().as_ref() {
+            if let Some(hit) = self.ivars().rows.borrow().get(table.selectedRow() as usize) {
+                if let Some(title) = self.ivars().preview_title.borrow().as_ref() {
+                    title.setStringValue(&NSString::from_str(&hit.title.replace('\n', " ")));
+                }
+            }
+        }
         self.ivars().previewing.set(true);
+        self.layout();
+        if self.ivars().preview_kind.get() == 1 {
+            self.makeFirstResponder(None);
+            return;
+        }
         if self.ivars().preview_kind.get() == 2 {
             if let Some(document) = self.ivars().document.borrow().as_ref() {
                 self.makeFirstResponder(Some(document));
@@ -809,6 +877,7 @@ impl ClipPanel {
 
     fn focus_search(&self) {
         self.ivars().previewing.set(false);
+        self.layout();
         if let Some(search) = self.ivars().search.borrow().as_ref() {
             self.makeFirstResponder(Some(search));
         }
@@ -942,7 +1011,11 @@ impl ClipPanel {
         }
         match event.keyCode() {
             53 => {
-                self.hide_panel();
+                if self.ivars().previewing.get() {
+                    self.focus_search();
+                } else {
+                    self.hide_panel();
+                }
                 true
             }
             36 | 76 => {
