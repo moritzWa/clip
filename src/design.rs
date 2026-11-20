@@ -13,6 +13,13 @@ pub const FOOTER: f64 = 52.0;
 pub const ROW: f64 = 38.0;
 pub const LIST_WIDTH: f64 = 280.0;
 
+pub fn preview_window_size(available: NSSize) -> NSSize {
+    NSSize::new(
+        (available.width * 0.9).min(1440.0),
+        (available.height * 0.9).min(1000.0),
+    )
+}
+
 pub fn expanded_preview_frame(width: f64, height: f64) -> NSRect {
     rect(
         16.0,
@@ -141,5 +148,16 @@ mod tests {
         assert_eq!(frame.size.height, 349.0);
         assert!(frame.origin.y > FOOTER);
         assert!(frame.origin.y + frame.size.height < HEIGHT - HEADER);
+    }
+
+    #[test]
+    fn enlarged_preview_fits_small_and_large_screens() {
+        let small = preview_window_size(NSSize::new(1024.0, 743.0));
+        assert!(small.width > WIDTH && small.height > HEIGHT);
+        assert!(small.width < 1024.0 && small.height < 743.0);
+        assert_eq!(
+            preview_window_size(NSSize::new(3000.0, 2000.0)),
+            NSSize::new(1440.0, 1000.0)
+        );
     }
 }

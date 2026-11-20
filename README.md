@@ -11,6 +11,8 @@ or application-level encryption.
 - Up/down: select a clip.
 - Right: open a full-width image, document or selectable text preview.
 - Left: return to the list. Escape returns from a preview, then hides the panel.
+- In an image preview: pinch to zoom, two-finger scroll to pan, double-tap to
+  toggle smart zoom. The −/Fit/+ controls work without a trackpad.
 - Enter: copy the selected item and paste into the previous application.
 
 Raycast's previous shortcut was removed manually. Automatic paste requires macOS
@@ -22,6 +24,16 @@ capsules. Type filters apply to the current result set (not the entire database)
 Full previews preserve the query and selected row when returning to the list.
 The expanded image and Quick Look document routes, Left/Escape return paths,
 and retained query/selection were visually verified in the macOS VM.
+Expanded previews use 90% of the available screen, capped at 1440×1000 points.
+Image zoom ranges from Fit to 16× Fit, anchored under the pinch location. The
+percentage is relative to Fit, not the image's original pixel resolution.
+
+The VM-only `image-zoom-qa` example sends synthetic magnification events through
+the production gesture selector and checks magnification, native panning, bounds,
+Fit reset and smart zoom. Compile it with `cargo build --example image-zoom-qa`,
+then run **inside a macOS VM only** with `CLIP_VM_TEST=1`. The app itself was also
+visually checked at Fit and 225%, after horizontal scrolling and when returning
+to the compact list. Physical trackpad hardware was not exercised by automation.
 
 ## Storage
 

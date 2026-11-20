@@ -54,6 +54,10 @@ struct Ivars {
     table: RefCell<Option<Retained<NSTableView>>>,
     text: RefCell<Option<Retained<NSTextView>>>,
     image: RefCell<Option<Retained<NSImageView>>>,
+    zoom_image: RefCell<Option<Retained<NSImageView>>>,
+    image_zoom: RefCell<Option<Retained<crate::image_zoom::ImageZoom>>>,
+    zoom_buttons: RefCell<Vec<Retained<NSButton>>>,
+    zoom_status: RefCell<Option<Retained<NSTextField>>>,
     document: RefCell<Option<Retained<QLPreviewView>>>,
     preview_kind: Cell<u8>,
     meta: RefCell<Option<Retained<NSTextField>>>,
@@ -148,12 +152,23 @@ define_class!(
             self.ivars().filter_index.set(sender.indexOfSelectedItem());
             self.refresh_results();
         }
+        #[unsafe(method(zoomImageIn:))]
+        fn zoom_in(&self, _: &AnyObject) { if let Some(zoom) = self.ivars().image_zoom.borrow().as_ref() { zoom.zoom_center(1.5); } }
+        #[unsafe(method(zoomImageOut:))]
+        fn zoom_out(&self, _: &AnyObject) { if let Some(zoom) = self.ivars().image_zoom.borrow().as_ref() { zoom.zoom_center(1.0 / 1.5); } }
+        #[unsafe(method(fitImage:))]
+        fn fit_image(&self, _: &AnyObject) { if let Some(zoom) = self.ivars().image_zoom.borrow().as_ref() { zoom.fit(); } }
         #[unsafe(method(tick:))]
         fn tick(&self, _: &NSTimer) {
             self.poll_hotkey();
             self.poll_pasteboard();
             self.poll_query();
             self.poll_ocr();
+            if self.ivars().previewing.get() {
+                if let (Some(zoom), Some(label)) = (self.ivars().image_zoom.borrow().as_ref(), self.ivars().zoom_status.borrow().as_ref()) {
+                    label.setStringValue(&NSString::from_str(&format!("{:.0}%", zoom.magnification() * 100.0)));
+                }
+            }
         }
 
         #[unsafe(method(pasteNow:))]
@@ -194,6 +209,10 @@ impl ClipPanel {
             table: RefCell::new(None),
             text: RefCell::new(None),
             image: RefCell::new(None),
+            zoom_image: RefCell::new(None),
+            image_zoom: RefCell::new(None),
+            zoom_buttons: RefCell::new(Vec::new()),
+            zoom_status: RefCell::new(None),
             document: RefCell::new(None),
             preview_kind: Cell::new(0),
             meta: RefCell::new(None),
@@ -351,6 +370,39 @@ impl ClipPanel {
         );
         image.setImageScaling(objc2_app_kit::NSImageScaling::ScaleProportionallyUpOrDown);
         content.addSubview(&image);
+        let zoom_image =
+            NSImageView::initWithFrame(NSImageView::alloc(mtm), rect(0.0, 0.0, 100.0, 100.0));
+        zoom_image.setImageScaling(objc2_app_kit::NSImageScaling::ScaleProportionallyUpOrDown);
+        let image_zoom = crate::image_zoom::ImageZoom::new(mtm);
+        image_zoom.setDocumentView(Some(&zoom_image));
+        image_zoom.setHidden(true);
+        content.addSubview(&image_zoom);
+        let mut zoom_buttons = Vec::new();
+        for (title, action) in [
+            ("−", objc2::sel!(zoomImageOut:)),
+            ("Fit", objc2::sel!(fitImage:)),
+            ("+", objc2::sel!(zoomImageIn:)),
+        ] {
+            let button = NSButton::initWithFrame(NSButton::alloc(mtm), rect(0.0, 0.0, 40.0, 30.0));
+            button.setTitle(&NSString::from_str(title));
+            button.setBordered(false);
+            button.setFont(Some(&objc2_app_kit::NSFont::systemFontOfSize(15.0)));
+            unsafe {
+                button.setTarget(Some(self));
+                button.setAction(Some(action));
+            }
+            button.setHidden(true);
+            content.addSubview(&button);
+            zoom_buttons.push(button);
+        }
+        let zoom_status = design::label("100%", 12.0, mtm);
+        zoom_status.setAlignment(objc2_app_kit::NSTextAlignment::Center);
+        zoom_status.setHidden(true);
+        content.addSubview(&zoom_status);
+        *self.ivars().zoom_buttons.borrow_mut() = zoom_buttons;
+        *self.ivars().zoom_status.borrow_mut() = Some(zoom_status);
+        *self.ivars().image_zoom.borrow_mut() = Some(image_zoom);
+        *self.ivars().zoom_image.borrow_mut() = Some(zoom_image);
 
         let document = unsafe {
             let view = QLPreviewView::initWithFrame_style(
@@ -437,6 +489,21 @@ impl ClipPanel {
         let w = bounds.size.width;
         let h = bounds.size.height;
         let expanded = self.ivars().previewing.get();
+        let zooming_image = expanded && self.ivars().preview_kind.get() == 1;
+        if let Some(zoom) = self.ivars().image_zoom.borrow().as_ref() {
+            zoom.setHidden(!zooming_image);
+        }
+        if let Some(image) = self.ivars().image.borrow().as_ref() {
+            image.setHidden(self.ivars().preview_kind.get() != 1 || zooming_image);
+        }
+        for (i, button) in self.ivars().zoom_buttons.borrow().iter().enumerate() {
+            button.setHidden(!zooming_image);
+            button.setFrame(rect(w / 2.0 - 92.0 + i as f64 * 42.0, 11.0, 40.0, 30.0));
+        }
+        if let Some(label) = self.ivars().zoom_status.borrow().as_ref() {
+            label.setHidden(!zooming_image);
+            label.setFrame(rect(w / 2.0 + 38.0, 17.0, 54.0, 18.0));
+        }
         let has_selection = !self.ivars().rows.borrow().is_empty();
         if let Some(search) = self.ivars().search.borrow().as_ref() {
             search.setHidden(expanded);
@@ -556,6 +623,12 @@ impl ClipPanel {
             if let Some(image) = self.ivars().image.borrow().as_ref() {
                 image.setFrame(frame);
             }
+            if let Some(zoom) = self.ivars().image_zoom.borrow().as_ref() {
+                zoom.setFrame(frame);
+                if let Some(image) = self.ivars().zoom_image.borrow().as_ref() {
+                    zoom.resize_document(image);
+                }
+            }
             if let Some(document) = self.ivars().document.borrow().as_ref() {
                 document.setFrame(frame);
             }
@@ -596,6 +669,26 @@ impl ClipPanel {
         NSApplication::sharedApplication(self.mtm()).activateIgnoringOtherApps(true);
         if let Some(search) = self.ivars().search.borrow().as_ref() {
             self.makeFirstResponder(Some(search));
+        }
+    }
+
+    fn resize_for_preview(&self, expanded: bool) {
+        if let Some(screen) = self.screen().or_else(|| NSScreen::mainScreen(self.mtm())) {
+            let visible = screen.visibleFrame();
+            let size = if expanded {
+                design::preview_window_size(visible.size)
+            } else {
+                NSSize::new(design::WIDTH, design::HEIGHT)
+            };
+            self.setFrame_display(
+                rect(
+                    visible.origin.x + (visible.size.width - size.width) / 2.0,
+                    visible.origin.y + (visible.size.height - size.height) / 2.0,
+                    size.width,
+                    size.height,
+                ),
+                true,
+            );
         }
     }
 
@@ -810,7 +903,7 @@ impl ClipPanel {
                             .iconForFile(&NSString::from_str(&path.display().to_string())),
                     ));
                 }
-                image.setHidden(false);
+                image.setHidden(self.ivars().previewing.get());
             } else {
                 image.setImage(None);
                 image.setHidden(true);
@@ -859,6 +952,15 @@ impl ClipPanel {
             }
         }
         self.ivars().previewing.set(true);
+        if let (Some(zoom), Some(image), Some(large_image)) = (
+            self.ivars().image_zoom.borrow().as_ref(),
+            self.ivars().image.borrow().as_ref(),
+            self.ivars().zoom_image.borrow().as_ref(),
+        ) {
+            large_image.setImage(image.image().as_deref());
+            zoom.fit();
+        }
+        self.resize_for_preview(true);
         self.layout();
         if self.ivars().preview_kind.get() == 1 {
             self.makeFirstResponder(None);
@@ -877,6 +979,7 @@ impl ClipPanel {
 
     fn focus_search(&self) {
         self.ivars().previewing.set(false);
+        self.resize_for_preview(false);
         self.layout();
         if let Some(search) = self.ivars().search.borrow().as_ref() {
             self.makeFirstResponder(Some(search));
