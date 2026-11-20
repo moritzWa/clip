@@ -13,6 +13,30 @@ pub const FOOTER: f64 = 52.0;
 pub const ROW: f64 = 38.0;
 pub const LIST_WIDTH: f64 = 280.0;
 
+define_class!(
+    #[unsafe(super(NSView))]
+    #[thread_kind = MainThreadOnly]
+    #[ivars = ()]
+    pub struct PanelSurface;
+    unsafe impl NSObjectProtocol for PanelSurface {}
+    impl PanelSurface {
+        #[unsafe(method(drawRect:))]
+        fn draw_background(&self, _: NSRect) {
+            // A light veil, not a new glass effect. Resolve the system color
+            // while drawing so this follows light/dark appearance changes.
+            NSColor::windowBackgroundColor().colorWithAlphaComponent(0.18).setFill();
+            NSBezierPath::fillRect(self.bounds());
+        }
+    }
+);
+
+impl PanelSurface {
+    pub fn new(frame: NSRect, mtm: MainThreadMarker) -> Retained<Self> {
+        let this = Self::alloc(mtm).set_ivars(());
+        unsafe { msg_send![super(this), initWithFrame: frame] }
+    }
+}
+
 pub fn preview_window_size(available: NSSize) -> NSSize {
     NSSize::new(
         (available.width * 0.9).min(1440.0),

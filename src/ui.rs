@@ -272,7 +272,8 @@ impl ClipPanel {
             design::RADIUS,
             &objc2_app_kit::NSColor::clearColor(),
         );
-        let content = NSView::initWithFrame(NSView::alloc(mtm), glass.bounds());
+        let content: Retained<NSView> =
+            unsafe { Retained::cast_unchecked(design::PanelSurface::new(glass.bounds(), mtm)) };
         glass.setContentView(Some(&content));
         self.setContentView(Some(&glass));
         *self.ivars().glass.borrow_mut() = Some(glass);

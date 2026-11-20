@@ -1,8 +1,12 @@
-# Clip
+# Clipglass
 
 A local macOS clipboard manager in Rust, using AppKit directly through `objc2`.
 SQLite FTS5 indexes text and screenshot OCR. No webview, network service, expiry,
 or application-level encryption.
+
+The chosen public name is Clipglass. Existing local bundle/storage identifiers
+remain `Clip` for now. Keep the current panel design, with a subtle 18% adaptive
+background veil for slightly more opacity; no additional Liquid Glass redesign.
 
 ## Controls
 
