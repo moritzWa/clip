@@ -4,14 +4,21 @@ The [36-second video](../media/clipglass-demo.mp4) records the real native app
 inside a disposable macOS VM. It has no audio track. It shows:
 
 - OCR search for `ORBIT-4827`, which appears only inside the generated image.
-- An enlarged image preview, zoomed from Fit to 150%, then restored.
+- An enlarged image preview, zoomed from Fit to 150%.
 - A code snippet with its indentation intact.
 - Three clips marked with X and pasted into a native editor in copy order.
 
 The raw capture was completed before conversion, cropped to remove the VM menu
-bar, and trimmed to 36 seconds. The result is H.264, 1024×720, 30 fps. No UI state
-or clipboard result was composited into the recording. The full output decoded
-without errors and a nine-frame contact sheet was visually reviewed.
+bar, and trimmed to 36 seconds. The result is H.264, 1024×800, 30 fps. An 80-pixel
+input-callout strip sits below the original 1024×720 recording without covering
+the app. It shows typed queries, arrow keys, X selection, and Enter. The mouse
+click on the zoom button is labelled as a click, not a keyboard shortcut.
+
+These are hand-timed editorial callouts, not a live keyboard-event capture. No
+app state or clipboard result was composited into the recording. Rebuild the
+strip with `scripts/overlay-demo-keys.py`, using the original raw recording as
+input. The full output decoded without errors and a contact sheet was visually
+reviewed.
 
 All text, URLs, documents, and images were generated for this demo. The only URL
 fixture uses `example.com`. The demo used its own home directory and SQLite
