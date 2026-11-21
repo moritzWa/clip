@@ -717,6 +717,14 @@ impl ClipPanel {
 
     fn hide_panel(&self) {
         self.orderOut(None);
+        // End field editing before resetting, so its editor cannot restore a
+        // stale query on the next open. Preview navigation never comes here.
+        self.makeFirstResponder(None);
+        if let Some(search) = self.ivars().search.borrow().as_ref() {
+            search.setStringValue(ns_string!(""));
+        }
+        self.ivars().query.borrow_mut().clear();
+        self.refresh_results();
     }
 
     fn poll_hotkey(&self) {

@@ -54,6 +54,9 @@ The development hotkey is currently tied to physical W: **⌘⇧W on a US keyboa
 
 X still types normally in the search field. Press Left or click the search field to edit a query; Up/Down returns to list browsing.
 
+Closing the panel clears the search, so reopening starts with recent clips.
+Returning from a large preview keeps the current query.
+
 Marked clips stay selected across searches and filters. Adjacent text and link clips are joined with a newline. Images and files are pasted as separate native payloads. Switching apps, changing the clipboard, or reopening Clipglass cancels the remaining media queue.
 
 ## Local data and privacy

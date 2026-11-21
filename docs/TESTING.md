@@ -28,6 +28,9 @@ muted. No private clipboard database was moved into the VM.
 - Old blank list titles displayed the first nonblank line. A paste receiver
   confirmed that the original spaces, newlines, and indentation remained intact.
 - The packaged app launched hidden and launchd restarted it after termination.
+- Closing a `blabla` search with the global hotkey and reopening showed an empty
+  search and recent clips. Escape dismissal reset the search too. Right/Left
+  preview navigation retained the query instead of clearing it.
 
 The `image-zoom-qa`, `paste-receiver-qa`, and `thumbnail-qa` examples are for VM-only
 checks. They require `CLIP_VM_TEST=1`. The fixture seeder refuses to seed the
