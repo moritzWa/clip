@@ -33,6 +33,7 @@ fixtures = [
     ("batch-third", "Batch third copied", "text", "BATCH THIRD\n\n", None),
     ("batch-second", "Batch second copied", "text", "BATCH SECOND", None),
     ("batch-first", "Batch first copied", "text", "  BATCH FIRST\n", None),
+    ("blank-title", " \t", "text", " \n\t   Actual visible first line\n    keep this indentation\n\n", None),
 ]
 for index, (id_, title, kind, text, path) in enumerate(fixtures):
     stamp = f"2026-11-01T12:00:0{9-index}Z"

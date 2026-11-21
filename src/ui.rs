@@ -31,6 +31,7 @@ struct Ivars {
     store: RefCell<Store>,
     rows: RefCell<Vec<Hit>>,
     recent: RefCell<Vec<Hit>>,
+    thumbnails: RefCell<crate::thumbnails::Thumbnails>,
     marked: RefCell<HashSet<String>>,
     paste_queue: RefCell<VecDeque<store::Preview>>,
     paste_timer: RefCell<Option<Retained<NSTimer>>>,
@@ -122,7 +123,14 @@ define_class!(
                 .borrow()
                 .get(row as usize)
                 .cloned();
-            hit.map(|hit| design::cell(&hit.title, &hit.kind, self.ivars().marked.borrow().contains(&hit.id), self.mtm()))
+            hit.map(|hit| {
+                let title = self.ivars().store.borrow().list_title(&hit);
+                let thumbnail = if hit.kind == "image" {
+                    let path = self.ivars().store.borrow().thumbnail_path(&hit.id);
+                    path.and_then(|path| self.ivars().thumbnails.borrow_mut().get(&path))
+                } else { None };
+                design::cell(&title, &hit.kind, thumbnail.as_deref(), self.ivars().marked.borrow().contains(&hit.id), self.mtm())
+            })
         }
 
         #[unsafe(method_id(tableView:rowViewForRow:))]
@@ -168,6 +176,7 @@ define_class!(
             self.poll_pasteboard();
             self.poll_query();
             self.poll_ocr();
+            self.poll_thumbnails();
             if self.ivars().previewing.get() {
                 if let (Some(zoom), Some(label)) = (self.ivars().image_zoom.borrow().as_ref(), self.ivars().zoom_status.borrow().as_ref()) {
                     label.setStringValue(&NSString::from_str(&format!("{:.0}%", zoom.magnification() * 100.0)));
@@ -196,6 +205,7 @@ impl ClipPanel {
             store: RefCell::new(store),
             rows: RefCell::new(rows),
             recent: RefCell::new(recent),
+            thumbnails: RefCell::new(crate::thumbnails::Thumbnails::new()),
             marked: RefCell::new(HashSet::new()),
             paste_queue: RefCell::new(VecDeque::new()),
             paste_timer: RefCell::new(None),
@@ -677,6 +687,7 @@ impl ClipPanel {
         }
         self.layout();
         self.makeKeyAndOrderFront(None);
+        self.refresh_thumbnail_rows();
         NSApplication::sharedApplication(self.mtm()).activateIgnoringOtherApps(true);
         if let Some(table) = self.ivars().table.borrow().as_ref() {
             self.makeFirstResponder(Some(table));
@@ -800,6 +811,30 @@ impl ClipPanel {
             let id = job.id.clone();
             if self.ivars().ocr.submit(job).is_ok() {
                 self.ivars().ocr_pending.borrow_mut().insert(id);
+            }
+        }
+    }
+
+    fn poll_thumbnails(&self) {
+        let changed = self.ivars().thumbnails.borrow_mut().poll();
+        if changed && self.isVisible() && !self.ivars().previewing.get() {
+            self.refresh_thumbnail_rows();
+        }
+    }
+
+    fn refresh_thumbnail_rows(&self) {
+        let Some(table) = self.ivars().table.borrow().clone() else {
+            return;
+        };
+        let selected = table.selectedRow();
+        let rows = table.rowsInRect(table.visibleRect());
+        if rows.length > 0 {
+            table.reloadDataForRowIndexes_columnIndexes(
+                &NSIndexSet::indexSetWithIndexesInRange(rows),
+                &NSIndexSet::indexSetWithIndex(0),
+            );
+            if selected >= 0 {
+                self.select_row(selected);
             }
         }
     }

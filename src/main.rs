@@ -4,6 +4,7 @@ mod ocr;
 mod paste;
 mod selection;
 mod store;
+mod thumbnails;
 mod ui;
 
 fn main() {

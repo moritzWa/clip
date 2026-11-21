@@ -36,6 +36,35 @@ pub fn data_dir() -> PathBuf {
 }
 
 impl Store {
+    pub fn thumbnail_path(&self, id: &str) -> Option<PathBuf> {
+        let path: String = self.conn.query_row(
+            "SELECT file_path FROM parts WHERE entry_id=?1 AND kind='image' AND file_path IS NOT NULL AND file_path<>'' LIMIT 1",
+            [id], |row| row.get(0),
+        ).ok()?;
+        Some(recovered_asset_path(&path))
+    }
+
+    pub fn list_title(&self, hit: &Hit) -> String {
+        let title = display_title(&hit.title);
+        if !title.is_empty() {
+            return title;
+        }
+        let title = self
+            .preview(&hit.id)
+            .map(|p| display_title(&p.text))
+            .unwrap_or_default();
+        if !title.is_empty() {
+            title
+        } else {
+            match hit.kind.as_str() {
+                "image" => "Image",
+                "file" => "File",
+                "link" => "Link",
+                _ => "Empty clip",
+            }
+            .into()
+        }
+    }
     pub fn selected_previews(
         &self,
         ids: &std::collections::HashSet<String>,
@@ -257,13 +286,7 @@ impl Store {
         }
         let id = new_id();
         let now = now_rfc3339();
-        let title: String = text
-            .lines()
-            .next()
-            .unwrap_or("")
-            .chars()
-            .take(180)
-            .collect();
+        let title = display_title(text);
         let kind = if text.starts_with("http://") || text.starts_with("https://") {
             "link"
         } else {
@@ -459,6 +482,17 @@ fn refresh_search_entry(conn: &Connection, id: &str) -> rusqlite::Result<()> {
         params![id, seq],
     )?;
     Ok(())
+}
+
+fn display_title(text: &str) -> String {
+    text.trim_start()
+        .lines()
+        .next()
+        .unwrap_or("")
+        .trim_end()
+        .chars()
+        .take(180)
+        .collect()
 }
 
 fn row_hit(r: &rusqlite::Row<'_>) -> rusqlite::Result<Hit> {
@@ -711,6 +745,28 @@ mod tests {
             "EXPLAIN QUERY PLAN SELECT id FROM entries ORDER BY COALESCE(updated_at, created_at) DESC, id DESC LIMIT 80", [], |r| r.get(3),
         ).unwrap();
         assert!(plan.contains("entries_recency"), "{plan}");
+    }
+
+    #[test]
+    fn display_titles_skip_whitespace_without_changing_pasted_text() {
+        let mut fixture = Fixture::new();
+        let text = " \t\n\r\n\u{2003}    first real line  \n    keep indentation\n\n";
+        fixture.store.insert_text(text, None);
+        let hit = fixture.store.recent(1).remove(0);
+        assert_eq!(hit.title, "first real line");
+        assert_eq!(fixture.store.preview(&hit.id).unwrap().text, text);
+        // Old imported entries may already have an empty/whitespace title.
+        fixture
+            .store
+            .conn
+            .execute("UPDATE entries SET title=' \t\n' WHERE id=?1", [&hit.id])
+            .unwrap();
+        let imported = fixture.store.recent(1).remove(0);
+        assert_eq!(fixture.store.list_title(&imported), "first real line");
+        assert_eq!(fixture.store.preview(&hit.id).unwrap().text, text);
+        assert_eq!(display_title("\t  code\nsecond line"), "code");
+        assert_eq!(display_title("\n\t "), "");
+        assert_eq!(display_title(&"ü".repeat(300)).chars().count(), 180);
     }
 
     #[test]

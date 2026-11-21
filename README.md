@@ -4,6 +4,16 @@ A local macOS clipboard manager in Rust, using AppKit directly through `objc2`.
 SQLite FTS5 indexes text and screenshot OCR. No webview, network service, expiry,
 or application-level encryption.
 
+Image rows show miniature screenshots. A single background ImageIO worker
+decodes thumbnails no larger than 64 pixels, with a 128-entry in-memory cache
+and generic icons while loading or if an image is missing. No thumbnail files
+are written to disk. List titles skip leading whitespace and blank lines,
+including older imports with blank titles; preview and pasted text stay intact.
+The VM-only `thumbnail-qa` example verifies downsampling, background delivery,
+cache hits and missing-image handling. The UI was checked with a synthetic
+color screenshot and an old-style blank title. A native paste receiver verified
+the text's leading spaces, blank lines and indentation survived exactly.
+
 The chosen public name is Clipglass. Existing local bundle/storage identifiers
 remain `Clip` for now. Keep the current panel design, with a subtle 18% adaptive
 background veil for slightly more opacity; no additional Liquid Glass redesign.

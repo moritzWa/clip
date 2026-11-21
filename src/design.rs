@@ -128,7 +128,13 @@ impl ClipRow {
     }
 }
 
-pub fn cell(title: &str, kind: &str, marked: bool, mtm: MainThreadMarker) -> Retained<NSView> {
+pub fn cell(
+    title: &str,
+    kind: &str,
+    thumbnail: Option<&NSImage>,
+    marked: bool,
+    mtm: MainThreadMarker,
+) -> Retained<NSView> {
     let view = NSView::initWithFrame(NSView::alloc(mtm), rect(0.0, 0.0, LIST_WIDTH - 16.0, ROW));
     let tile = NSView::initWithFrame(NSView::alloc(mtm), rect(8.0, 8.0, 22.0, 22.0));
     // Icon tiles sit well inside each row, not at the outer panel's corners.
@@ -144,8 +150,14 @@ pub fn cell(title: &str, kind: &str, marked: bool, mtm: MainThreadMarker) -> Ret
         "link" => "link",
         _ => "doc.text",
     };
-    icon.setImage(symbol(name).as_deref());
-    icon.setContentTintColor(Some(&NSColor::labelColor()));
+    if let Some(thumbnail) = thumbnail {
+        icon.setFrame(rect(0.0, 0.0, 22.0, 22.0));
+        icon.setImageScaling(NSImageScaling::ScaleProportionallyUpOrDown);
+        icon.setImage(Some(thumbnail));
+    } else {
+        icon.setImage(symbol(name).as_deref());
+        icon.setContentTintColor(Some(&NSColor::labelColor()));
+    }
     tile.addSubview(&icon);
     view.addSubview(&tile);
     let text = label(&title.replace('\n', " "), 15.0, mtm);
