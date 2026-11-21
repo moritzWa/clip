@@ -36,6 +36,36 @@ pub fn data_dir() -> PathBuf {
 }
 
 impl Store {
+    pub fn selected_previews(
+        &self,
+        ids: &std::collections::HashSet<String>,
+    ) -> Result<Vec<Preview>, String> {
+        if ids.is_empty() {
+            return Ok(Vec::new());
+        }
+        let placeholders = std::iter::repeat_n("?", ids.len())
+            .collect::<Vec<_>>()
+            .join(",");
+        let sql = format!(
+            "SELECT id FROM entries WHERE id IN ({placeholders}) ORDER BY COALESCE(updated_at, created_at), rowid"
+        );
+        let mut statement = self.conn.prepare(&sql).map_err(|e| e.to_string())?;
+        let ordered = statement
+            .query_map(rusqlite::params_from_iter(ids.iter()), |row| {
+                row.get::<_, String>(0)
+            })
+            .map_err(|e| e.to_string())?;
+        let mut previews = Vec::new();
+        for id in ordered {
+            let id = id.map_err(|e| e.to_string())?;
+            previews.push(self.preview(&id).ok_or("A selected clip is unavailable")?);
+        }
+        if previews.len() != ids.len() {
+            return Err("A selected clip was removed".into());
+        }
+        Ok(previews)
+    }
+
     pub fn open() -> Result<Self, String> {
         let dir = data_dir();
         Self::open_in(&dir)
@@ -681,6 +711,49 @@ mod tests {
             "EXPLAIN QUERY PLAN SELECT id FROM entries ORDER BY COALESCE(updated_at, created_at) DESC, id DESC LIMIT 80", [], |r| r.get(3),
         ).unwrap();
         assert!(plan.contains("entries_recency"), "{plan}");
+    }
+
+    #[test]
+    fn batch_paste_orders_by_last_copy_not_selection_or_search_order() {
+        let mut fixture = Fixture::new();
+        for text in ["first", "second", "third"] {
+            fixture.store.insert_text(text, None);
+        }
+        let hits = fixture.store.recent(10);
+        let ids = hits.iter().map(|h| h.id.clone()).collect();
+        for (i, word) in ["first", "second", "third"].into_iter().enumerate() {
+            let id = &hits.iter().find(|h| h.title == word).unwrap().id;
+            fixture
+                .store
+                .conn
+                .execute(
+                    "UPDATE entries SET created_at=?1, updated_at=NULL WHERE id=?2",
+                    params![format!("2026-01-01T00:00:0{i}Z"), id],
+                )
+                .unwrap();
+        }
+        let texts = || {
+            fixture
+                .store
+                .selected_previews(&ids)
+                .unwrap()
+                .into_iter()
+                .map(|p| p.text)
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(texts(), ["first", "second", "third"]);
+        let first_id = &hits.iter().find(|h| h.title == "first").unwrap().id;
+        fixture
+            .store
+            .conn
+            .execute(
+                "UPDATE entries SET updated_at='2026-01-02T00:00:00Z' WHERE id=?1",
+                [first_id],
+            )
+            .unwrap();
+        assert_eq!(texts(), ["second", "third", "first"]);
+        let missing = ["does-not-exist".into()].into_iter().collect();
+        assert!(fixture.store.selected_previews(&missing).is_err());
     }
 
     #[test]

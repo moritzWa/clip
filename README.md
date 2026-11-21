@@ -13,11 +13,22 @@ background veil for slightly more opacity; no additional Liquid Glass redesign.
 - Cmd+Shift+U: open/hide (physical W on DeutschADNW).
 - On Moritz's Mac, Karabiner maps only left Cmd+U to that internal chord.
 - Up/down: select a clip.
+- X: mark/unmark the current clip while browsing the list. Marked clips show a
+  checkmark and selection count, and stay marked across searches and type filters.
+- Typing starts a search. Left or clicking the search field lets you type X as
+  part of a query; Up/down returns to list browsing and its X shortcut.
 - Right: open a full-width image, document or selectable text preview.
 - Left: return to the list. Escape returns from a preview, then hides the panel.
 - In an image preview: pinch to zoom, two-finger scroll to pan, double-tap to
   toggle smart zoom. The −/Fit/+ controls work without a trackpad.
 - Enter: copy the selected item and paste into the previous application.
+- With marked items, Enter pastes all of them in last-copy order, oldest first,
+  not the order in which you marked them. Adjacent text/link clips are joined by
+  a newline without trimming their contents. Images and files retain their
+  native clipboard types and are pasted sequentially, 250ms apart. Mixed/media
+  batches depend on the destination accepting those types and processing each
+  paste within that interval. Switching apps or changing the clipboard cancels
+  the remaining queue. Escape clears marks before hiding the list.
 
 Raycast's previous shortcut was removed manually. Automatic paste requires macOS
 Accessibility permission for Clip.app. Without it, Enter still copies the item.
@@ -38,6 +49,14 @@ Fit reset and smart zoom. Compile it with `cargo build --example image-zoom-qa`,
 then run **inside a macOS VM only** with `CLIP_VM_TEST=1`. The app itself was also
 visually checked at Fit and 225%, after horizontal scrolling and when returning
 to the compact list. Physical trackpad hardware was not exercised by automation.
+
+Batch selection was tested in the VM against the native `paste-receiver-qa`
+example: three text clips selected out of order arrived oldest-copy first with
+their exact whitespace; a mixed text/file/image selection arrived as three
+native clipboard payloads in copy order. Search typing containing X, retained
+marks across searches, toggling/unmarking, Escape clearing, and cancelling an
+in-progress media batch by reopening the panel were also checked. The receiver
+is guarded by `CLIP_VM_TEST=1` and must only run with synthetic data in a VM.
 
 ## Storage
 

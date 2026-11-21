@@ -2,6 +2,7 @@ mod design;
 mod image_zoom;
 mod ocr;
 mod paste;
+mod selection;
 mod store;
 mod ui;
 

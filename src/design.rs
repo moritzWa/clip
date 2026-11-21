@@ -106,6 +106,9 @@ define_class!(
     unsafe impl NSObjectProtocol for ClipRow {}
 
     impl ClipRow {
+        #[unsafe(method(interiorBackgroundStyle))]
+        fn background_style(&self) -> NSBackgroundStyle { NSBackgroundStyle::Normal }
+
         #[unsafe(method(drawSelectionInRect:))]
         fn draw_selection(&self, _: NSRect) {
             NSColor::labelColor().colorWithAlphaComponent(0.085).setFill();
@@ -125,7 +128,7 @@ impl ClipRow {
     }
 }
 
-pub fn cell(title: &str, kind: &str, mtm: MainThreadMarker) -> Retained<NSView> {
+pub fn cell(title: &str, kind: &str, marked: bool, mtm: MainThreadMarker) -> Retained<NSView> {
     let view = NSView::initWithFrame(NSView::alloc(mtm), rect(0.0, 0.0, LIST_WIDTH - 16.0, ROW));
     let tile = NSView::initWithFrame(NSView::alloc(mtm), rect(8.0, 8.0, 22.0, 22.0));
     // Icon tiles sit well inside each row, not at the outer panel's corners.
@@ -146,9 +149,18 @@ pub fn cell(title: &str, kind: &str, mtm: MainThreadMarker) -> Retained<NSView> 
     tile.addSubview(&icon);
     view.addSubview(&tile);
     let text = label(&title.replace('\n', " "), 15.0, mtm);
-    text.setFrame(rect(42.0, 9.0, LIST_WIDTH - 66.0, 21.0));
+    text.setFrame(rect(42.0, 9.0, LIST_WIDTH - 92.0, 21.0));
     text.setAutoresizingMask(NSAutoresizingMaskOptions::ViewWidthSizable);
     view.addSubview(&text);
+    if marked {
+        let check = NSImageView::initWithFrame(
+            NSImageView::alloc(mtm),
+            rect(LIST_WIDTH - 42.0, 10.0, 18.0, 18.0),
+        );
+        check.setImage(symbol("checkmark.circle.fill").as_deref());
+        check.setContentTintColor(Some(&NSColor::controlAccentColor()));
+        view.addSubview(&check);
+    }
     view
 }
 

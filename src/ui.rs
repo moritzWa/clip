@@ -1,5 +1,5 @@
 use std::cell::{Cell, RefCell};
-use std::collections::HashSet;
+use std::collections::{HashSet, VecDeque};
 use std::time::{Duration, Instant};
 
 use block2::RcBlock;
@@ -31,6 +31,10 @@ struct Ivars {
     store: RefCell<Store>,
     rows: RefCell<Vec<Hit>>,
     recent: RefCell<Vec<Hit>>,
+    marked: RefCell<HashSet<String>>,
+    paste_queue: RefCell<VecDeque<store::Preview>>,
+    paste_timer: RefCell<Option<Retained<NSTimer>>>,
+    pasting: Cell<bool>,
     query: RefCell<String>,
     search: RefCell<Option<Retained<NSTextField>>>,
     preview_title: RefCell<Option<Retained<NSTextField>>>,
@@ -118,7 +122,7 @@ define_class!(
                 .borrow()
                 .get(row as usize)
                 .cloned();
-            hit.map(|hit| design::cell(&hit.title, &hit.kind, self.mtm()))
+            hit.map(|hit| design::cell(&hit.title, &hit.kind, self.ivars().marked.borrow().contains(&hit.id), self.mtm()))
         }
 
         #[unsafe(method_id(tableView:rowViewForRow:))]
@@ -172,9 +176,9 @@ define_class!(
         }
 
         #[unsafe(method(pasteNow:))]
-        fn paste_now(&self, _: &NSTimer) {
-            paste::post_paste();
-        }
+        fn paste_now(&self, _: &NSTimer) { self.deliver_paste(); }
+        #[unsafe(method(pasteNext:))]
+        fn paste_next(&self, _: &NSTimer) { self.advance_paste(); }
     }
 );
 
@@ -192,6 +196,10 @@ impl ClipPanel {
             store: RefCell::new(store),
             rows: RefCell::new(rows),
             recent: RefCell::new(recent),
+            marked: RefCell::new(HashSet::new()),
+            paste_queue: RefCell::new(VecDeque::new()),
+            paste_timer: RefCell::new(None),
+            pasting: Cell::new(false),
             query: RefCell::new(String::new()),
             search: RefCell::new(None),
             preview_title: RefCell::new(None),
@@ -483,6 +491,7 @@ impl ClipPanel {
         *self.ivars().text_scroll.borrow_mut() = Some(text_scroll);
         self.layout();
         self.select_row(0);
+        self.update_selection_ui();
     }
 
     fn layout(&self) {
@@ -640,6 +649,7 @@ impl ClipPanel {
     }
 
     fn show_panel(&self) {
+        self.cancel_paste();
         self.ivars().previewing.set(false);
         if let Some(app) = NSWorkspace::sharedWorkspace().frontmostApplication() {
             self.ivars().prev_pid.set(app.processIdentifier());
@@ -668,9 +678,10 @@ impl ClipPanel {
         self.layout();
         self.makeKeyAndOrderFront(None);
         NSApplication::sharedApplication(self.mtm()).activateIgnoringOtherApps(true);
-        if let Some(search) = self.ivars().search.borrow().as_ref() {
-            self.makeFirstResponder(Some(search));
+        if let Some(table) = self.ivars().table.borrow().as_ref() {
+            self.makeFirstResponder(Some(table));
         }
+        self.update_selection_ui();
     }
 
     fn resize_for_preview(&self, expanded: bool) {
@@ -750,6 +761,7 @@ impl ClipPanel {
             table.reloadData();
         }
         self.select_row(0);
+        self.update_selection_ui();
     }
 
     fn poll_ocr(&self) {
@@ -987,7 +999,90 @@ impl ClipPanel {
         }
     }
 
+    fn list_is_focused(&self) -> bool {
+        self.ivars().table.borrow().as_ref().is_some_and(|table| {
+            self.firstResponder().is_some_and(|responder| {
+                Retained::as_ptr(&responder).cast::<AnyObject>()
+                    == Retained::as_ptr(table).cast::<AnyObject>()
+            })
+        })
+    }
+
+    fn toggle_mark(&self) {
+        let row = self
+            .ivars()
+            .table
+            .borrow()
+            .as_ref()
+            .map(|t| t.selectedRow())
+            .unwrap_or(-1);
+        let id = self
+            .ivars()
+            .rows
+            .borrow()
+            .get(row as usize)
+            .map(|hit| hit.id.clone());
+        if let Some(id) = id {
+            {
+                let mut marked = self.ivars().marked.borrow_mut();
+                if !marked.remove(&id) {
+                    marked.insert(id);
+                }
+            }
+            self.reload_marks();
+        }
+    }
+
+    fn reload_marks(&self) {
+        if let Some(table) = self.ivars().table.borrow().as_ref() {
+            let row = table.selectedRow();
+            table.reloadData();
+            if row >= 0 {
+                table.selectRowIndexes_byExtendingSelection(
+                    &NSIndexSet::indexSetWithIndex(row as usize),
+                    false,
+                );
+            }
+        }
+        self.update_selection_ui();
+    }
+
+    fn update_selection_ui(&self) {
+        let count = self.ivars().marked.borrow().len();
+        if let Some(section) = self.ivars().section.borrow().as_ref() {
+            let name = if self.ivars().query.borrow().trim().is_empty() {
+                "Recent"
+            } else {
+                "Results"
+            };
+            let label = if count == 0 {
+                format!("{name} · X to select")
+            } else {
+                format!("{name} · {count} selected")
+            };
+            section.setStringValue(&NSString::from_str(&label));
+        }
+        if let Some(button) = self.ivars().paste_button.borrow().as_ref() {
+            let name = NSRunningApplication::runningApplicationWithProcessIdentifier(
+                self.ivars().prev_pid.get(),
+            )
+            .and_then(|app| app.localizedName())
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| "previous app".into());
+            let title = if count == 0 {
+                format!("Paste to {name}    ↩")
+            } else {
+                format!("Paste {count} selected items    ↩")
+            };
+            button.setTitle(&NSString::from_str(&title));
+            button.setEnabled(count > 0 || !self.ivars().rows.borrow().is_empty());
+        }
+    }
+
     fn paste_selected(&self) {
+        if self.ivars().pasting.get() {
+            return;
+        }
         let row = self
             .ivars()
             .table
@@ -1001,15 +1096,41 @@ impl ClipPanel {
             .borrow()
             .get(row as usize)
             .map(|h| h.id.clone());
-        let Some(id) = id else {
+        let mut ids = self.ivars().marked.borrow().clone();
+        if ids.is_empty() {
+            if let Some(id) = id {
+                ids.insert(id);
+            }
+        }
+        let previews = match self.ivars().store.borrow().selected_previews(&ids) {
+            Ok(previews) => previews,
+            Err(error) => {
+                eprintln!("clip: cannot paste selection: {error}");
+                return;
+            }
+        };
+        let mut plan = crate::selection::paste_plan(previews);
+        let Some(first) = plan.pop_front() else {
             return;
         };
-        let Some(preview) = self.ivars().store.borrow().preview(&id) else {
+        if !self.write_preview(&first) {
             return;
-        };
+        }
+        *self.ivars().paste_queue.borrow_mut() = plan;
+        self.ivars().pasting.set(true);
+        self.ivars().marked.borrow_mut().clear();
+        self.reload_marks();
+        let pid = self.ivars().prev_pid.get();
+        self.hide_panel();
+        if let Some(app) = NSRunningApplication::runningApplicationWithProcessIdentifier(pid) {
+            app.activateWithOptions(NSApplicationActivationOptions::ActivateIgnoringOtherApps);
+        }
+        self.schedule_paste(0.08, objc2::sel!(pasteNow:));
+    }
+
+    fn write_preview(&self, preview: &store::Preview) -> bool {
         let pb = NSPasteboard::generalPasteboard();
-        pb.clearContents();
-        if let Some(path) = preview.image_path.as_ref().filter(|p| p.exists()) {
+        if let Some(path) = preview.image_path.as_ref() {
             if let Ok(bytes) = std::fs::read(path) {
                 let data = objc2_foundation::NSData::from_vec(bytes);
                 let data_type = if path
@@ -1020,34 +1141,100 @@ impl ClipPanel {
                 } else {
                     unsafe { NSPasteboardTypePNG }
                 };
-                pb.setData_forType(Some(&data), data_type);
+                pb.clearContents();
+                if !pb.setData_forType(Some(&data), data_type) {
+                    return false;
+                }
+            } else {
+                eprintln!("clip: selected image is unavailable");
+                return false;
             }
-        } else if let Some(path) = preview.file_path.as_ref().filter(|p| p.exists()) {
+        } else if let Some(path) = preview.file_path.as_ref() {
+            if !path.exists() {
+                eprintln!("clip: selected file is unavailable");
+                return false;
+            }
             let url = NSURL::fileURLWithPath(&NSString::from_str(&path.to_string_lossy()));
             let Some(url_string) = url.absoluteString() else {
-                return;
+                return false;
             };
-            pb.setString_forType(&url_string, unsafe { NSPasteboardTypeFileURL });
+            pb.clearContents();
+            if !pb.setString_forType(&url_string, unsafe { NSPasteboardTypeFileURL }) {
+                return false;
+            }
         } else {
-            pb.setString_forType(&NSString::from_str(&preview.text), unsafe {
+            pb.clearContents();
+            if !pb.setString_forType(&NSString::from_str(&preview.text), unsafe {
                 NSPasteboardTypeString
-            });
+            }) {
+                return false;
+            }
         }
         self.ivars().ignore_change.set(pb.changeCount());
-        let pid = self.ivars().prev_pid.get();
-        self.hide_panel();
-        if let Some(app) = NSRunningApplication::runningApplicationWithProcessIdentifier(pid) {
-            app.activateWithOptions(NSApplicationActivationOptions::ActivateIgnoringOtherApps);
+        true
+    }
+
+    fn schedule_paste(&self, delay: f64, selector: objc2::runtime::Sel) {
+        if let Some(timer) = self.ivars().paste_timer.borrow_mut().take() {
+            timer.invalidate();
         }
-        // Let the previous app become key before the key event.
-        unsafe {
-            let _ = NSTimer::scheduledTimerWithTimeInterval_target_selector_userInfo_repeats(
-                0.05,
-                self,
-                objc2::sel!(pasteNow:),
-                None,
-                false,
-            );
+        let timer = unsafe {
+            NSTimer::scheduledTimerWithTimeInterval_target_selector_userInfo_repeats(
+                delay, self, selector, None, false,
+            )
+        };
+        *self.ivars().paste_timer.borrow_mut() = Some(timer);
+    }
+
+    fn cancel_paste(&self) {
+        self.ivars().pasting.set(false);
+        self.ivars().paste_queue.borrow_mut().clear();
+        if let Some(timer) = self.ivars().paste_timer.borrow_mut().take() {
+            timer.invalidate();
+        }
+    }
+
+    fn paste_target_unchanged(&self) -> bool {
+        self.ivars().pasting.get()
+            && NSWorkspace::sharedWorkspace()
+                .frontmostApplication()
+                .is_some_and(|app| app.processIdentifier() == self.ivars().prev_pid.get())
+            && NSPasteboard::generalPasteboard().changeCount() == self.ivars().ignore_change.get()
+    }
+
+    fn deliver_paste(&self) {
+        if !self.paste_target_unchanged() {
+            self.cancel_paste();
+            return;
+        }
+        if !paste::accessibility_trusted() {
+            paste::post_paste();
+            self.cancel_paste();
+            return;
+        }
+        paste::post_paste();
+        if self.ivars().paste_queue.borrow().is_empty() {
+            self.cancel_paste();
+        } else {
+            // Mixed/media selections require distinct native paste operations.
+            self.schedule_paste(0.25, objc2::sel!(pasteNext:));
+        }
+    }
+
+    fn advance_paste(&self) {
+        if !self.paste_target_unchanged() {
+            self.cancel_paste();
+            return;
+        }
+        let next = self.ivars().paste_queue.borrow_mut().pop_front();
+        if let Some(preview) = next {
+            if self.write_preview(&preview) {
+                self.schedule_paste(0.05, objc2::sel!(pasteNow:));
+            } else {
+                self.cancel_paste();
+            }
+        } else {
+            self.cancel_paste();
         }
     }
 
@@ -1113,12 +1300,40 @@ impl ClipPanel {
         if !self.isVisible() {
             return false;
         }
+        let plain = !event.modifierFlags().intersects(
+            objc2_app_kit::NSEventModifierFlags::Command
+                | objc2_app_kit::NSEventModifierFlags::Control
+                | objc2_app_kit::NSEventModifierFlags::Option,
+        );
+        if plain && !self.ivars().previewing.get() && self.list_is_focused() {
+            if let Some(chars) = event.charactersIgnoringModifiers() {
+                let chars = chars.to_string();
+                if chars.eq_ignore_ascii_case("x") {
+                    if !event.isARepeat() {
+                        self.toggle_mark();
+                    }
+                    return true;
+                }
+                if chars
+                    .chars()
+                    .any(|c| !c.is_control() && !(0xf700..=0xf8ff).contains(&(c as u32)))
+                {
+                    self.focus_search();
+                    return false;
+                }
+            }
+        }
         match event.keyCode() {
             53 => {
                 if self.ivars().previewing.get() {
                     self.focus_search();
                 } else {
-                    self.hide_panel();
+                    if !self.ivars().marked.borrow().is_empty() {
+                        self.ivars().marked.borrow_mut().clear();
+                        self.reload_marks();
+                    } else {
+                        self.hide_panel();
+                    }
                 }
                 true
             }
@@ -1139,6 +1354,9 @@ impl ClipPanel {
                     return false;
                 }
                 self.move_selection(1);
+                if let Some(table) = self.ivars().table.borrow().as_ref() {
+                    self.makeFirstResponder(Some(table));
+                }
                 true
             }
             126 => {
@@ -1146,6 +1364,9 @@ impl ClipPanel {
                     return false;
                 }
                 self.move_selection(-1);
+                if let Some(table) = self.ivars().table.borrow().as_ref() {
+                    self.makeFirstResponder(Some(table));
+                }
                 true
             }
             _ => false,
