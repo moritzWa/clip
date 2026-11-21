@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="de">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Clipglass · privater Launch-Entwurf</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 40px 24px 80px; background: #f3f5f8; color: #24334b; font: 16px/1.6 system-ui, sans-serif; }
+  main { max-width: 1040px; margin: auto; }
+  h1 { font-size: 42px; margin: 8px 0; letter-spacing: -1.5px; }
+  h2 { margin-top: 40px; }
+  .status { color: #85531b; font-weight: 650; }
+  video, img { width: 100%; display: block; background: #e5ebf3; }
+  a { color: #315b91; }
+  pre { overflow: auto; background: white; padding: 20px; font-size: 14px; }
+  blockquote { margin: 0; padding: 20px 28px; background: white; border-left: 3px solid #729bc6; }
+  .links { display: flex; gap: 20px; flex-wrap: wrap; margin: 24px 0; }
+</style>
+<main>
+  <p class="status">Privater Entwurf. Nichts veröffentlicht oder eingeplant.</p>
+  <h1>Clipglass</h1>
+  <p>README, Installation und Demo sind vorbereitet. Repo-Name, Lizenz und Veröffentlichung bleiben zur Freigabe offen.</p>
+  <nav class="links">
+    <a href="../../README.md">README</a>
+    <a href="../INSTALL.md">Installationsanleitung</a>
+    <a href="REVIEW.md">Freigabe-Checkliste</a>
+    <a href="LICENSE-MIT.proposed.txt">MIT-Vorschlag</a>
+  </nav>
+  <h2>Demo mit Testdaten</h2>
+  <p>36 Sekunden, ohne Audio. Echte App in einer isolierten macOS-VM: OCR-Suche, Bild-Zoom, Code und Mehrfach-Paste.</p>
+  <video controls muted preload="metadata" poster="../media/clipglass-ocr-search.png">
+    <source src="../media/clipglass-demo.mp4" type="video/mp4">
+  </video>
+  <p><a href="../media/clipglass-demo.mp4">MP4 öffnen</a> · <a href="DEMO.md">Testdaten und Aufnahme</a></p>
+  <h2>Post-Entwurf</h2>
+  <blockquote>
+    <p>Built Clipglass, a native macOS clipboard manager in Rust.</p>
+    <p>Search text inside screenshots, zoom into image previews, and select several clips to paste in copy order. Local history, no account, no subscription, no webview.</p>
+    <p>Source + demo: [approved repository URL]</p>
+  </blockquote>
+  <p>Link bleibt ein Platzhalter. Kein Post wurde gesendet oder geplant.</p>
+  <h2>Installation aus dem Quellcode</h2>
+  <p>macOS 26+, Rust, Xcode Command Line Tools und Python 3. Das Repo ist noch privat. Kein signierter Download.</p>
+  <pre>git clone https://github.com/moritzWa/clip.git clipglass
+cd clipglass
+cargo build --locked
+sh scripts/install.sh "$PWD/target/debug/clip"</pre>
+  <p>Accessibility für Clip muss manuell aktiviert werden. Die History ist unverschlüsselt. Das Tastenkürzel ist derzeit fest an Command+Shift+physisches W gebunden.</p>
+  <h2>Screenshot</h2>
+  <img src="../media/clipglass-history.png" alt="Clipglass mit ausschließlich generierter Clipboard-History">
+</main>
+</html>

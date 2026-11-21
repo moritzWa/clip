@@ -1,168 +1,89 @@
 # Clipglass
 
-A local macOS clipboard manager in Rust, using AppKit directly through `objc2`.
-SQLite FTS5 indexes text and screenshot OCR. No webview, network service, expiry,
-or application-level encryption.
+A keyboard-first clipboard history for macOS, built in Rust with native AppKit views. No webview, account, or cloud service.
 
-Image rows show miniature screenshots. A single background ImageIO worker
-decodes thumbnails no larger than 64 pixels, with a 128-entry in-memory cache
-and generic icons while loading or if an image is missing. No thumbnail files
-are written to disk. List titles skip leading whitespace and blank lines,
-including older imports with blank titles; preview and pasted text stay intact.
-The VM-only `thumbnail-qa` example verifies downsampling, background delivery,
-cache hits and missing-image handling. The UI was checked with a synthetic
-color screenshot and an old-style blank title. A native paste receiver verified
-the text's leading spaces, blank lines and indentation survived exactly.
+<!-- Launch draft: repository and media stay private until explicit approval. -->
 
-The chosen public name is Clipglass. Existing local bundle/storage identifiers
-remain `Clip` for now. Keep the current panel design, with a subtle 18% adaptive
-background veil for slightly more opacity; no additional Liquid Glass redesign.
+![Clipglass clipboard history with screenshot thumbnails](docs/media/clipglass-history.png)
 
-## Controls
+[Watch the short demo](docs/media/clipglass-demo.mp4). Every clip in the demo is synthetic.
 
-- Cmd+Shift+U: open/hide (physical W on DeutschADNW).
-- On Moritz's Mac, Karabiner maps only left Cmd+U to that internal chord.
-- Up/down: select a clip.
-- X: mark/unmark the current clip while browsing the list. Marked clips show a
-  checkmark and selection count, and stay marked across searches and type filters.
-- Typing starts a search. Left or clicking the search field lets you type X as
-  part of a query; Up/down returns to list browsing and its X shortcut.
-- Right: open a full-width image, document or selectable text preview.
-- Left: return to the list. Escape returns from a preview, then hides the panel.
-- In an image preview: pinch to zoom, two-finger scroll to pan, double-tap to
-  toggle smart zoom. The −/Fit/+ controls work without a trackpad.
-- Enter: copy the selected item and paste into the previous application.
-- With marked items, Enter pastes all of them in last-copy order, oldest first,
-  not the order in which you marked them. Adjacent text/link clips are joined by
-  a newline without trimming their contents. Images and files retain their
-  native clipboard types and are pasted sequentially, 250ms apart. Mixed/media
-  batches depend on the destination accepting those types and processing each
-  paste within that interval. Switching apps or changing the clipboard cancels
-  the remaining queue. Escape clears marks before hiding the list.
+## What it does
 
-Raycast's previous shortcut was removed manually. Automatic paste requires macOS
-Accessibility permission for Clip.app. Without it, Enter still copies the item.
+- Keeps local history without an automatic expiry limit.
+- Searches text, links, and text recognized inside screenshots with Apple Vision.
+- Shows screenshot thumbnails, selectable text, and native Quick Look document previews.
+- Opens larger previews with Right Arrow. Pinch to zoom, scroll to pan, or use the Fit and zoom buttons.
+- Marks clips with X and pastes them in copy order, oldest first.
+- Keeps indentation and blank lines when pasting. Only list titles drop leading whitespace.
 
-The borderless 750×475-point panel uses native macOS glass, a 26-point outer
-radius, 38-point list rows, separate preview/information areas and glass footer
-capsules. Type filters apply to the current result set (not the entire database).
-Full previews preserve the query and selected row when returning to the list.
-The expanded image and Quick Look document routes, Left/Escape return paths,
-and retained query/selection were visually verified in the macOS VM.
-Expanded previews use 90% of the available screen, capped at 1440×1000 points.
-Image zoom ranges from Fit to 16× Fit, anchored under the pinch location. The
-percentage is relative to Fit, not the image's original pixel resolution.
+## Install from source
 
-The VM-only `image-zoom-qa` example sends synthetic magnification events through
-the production gesture selector and checks magnification, native panning, bounds,
-Fit reset and smart zoom. Compile it with `cargo build --example image-zoom-qa`,
-then run **inside a macOS VM only** with `CLIP_VM_TEST=1`. The app itself was also
-visually checked at Fit and 225%, after horizontal scrolling and when returning
-to the compact list. Physical trackpad hardware was not exercised by automation.
+**This is a pre-release development build. There is no signed or notarized download yet.**
 
-Batch selection was tested in the VM against the native `paste-receiver-qa`
-example: three text clips selected out of order arrived oldest-copy first with
-their exact whitespace; a mixed text/file/image selection arrived as three
-native clipboard payloads in copy order. Search typing containing X, retained
-marks across searches, toggling/unmarking, Escape clearing, and cancelling an
-in-progress media batch by reopening the panel were also checked. The receiver
-is guarded by `CLIP_VM_TEST=1` and must only run with synthetic data in a VM.
-
-## Storage
-
-Data lives under `~/Library/Application Support/Clip/`, never in this repository.
-The source uses `history.db`, taking a consistent SQLite backup of the recovered
-`import/history.db` on first use. Images are separate files. The initial import contains
-1,100 entries and the OCR text Raycast had already generated.
-
-The source now includes a bounded, single-worker Vision OCR queue, native Quick
-Look document previews with autoplay disabled, transaction-protected writes,
-whitespace-preserving text capture, and collision-resistant IDs. These changes
-are included in the packaged build.
-
-## Local installation
+You need macOS 26 or later, Xcode Command Line Tools, Rust stable, and Python 3. The current build has been tested on Apple Silicon. Intel support has not been verified.
 
 ```sh
-cargo build
+git clone https://github.com/moritzWa/clip.git clipglass
+cd clipglass
+cargo build --locked
 sh scripts/install.sh "$PWD/target/debug/clip"
 ```
 
-This installs `~/Applications/Clip.app` (stable ID `com.moritz.clip`, ad-hoc signed)
-and a per-user launch agent. It launches hidden, starts at login, and restarts if
-the process exits. Existing bundles are preserved as timestamped backups. It
-does not change Accessibility permissions or keyboard settings. Enable Clip in
-System Settings → Privacy & Security → Accessibility to allow automatic paste.
+The repository is private during launch preparation, so cloning currently requires access.
 
-Logs are private files under `~/Library/Logs/Clip/`, including panic backtraces,
-startup PID and Accessibility status, never clipboard contents. To stop it:
+The installer creates `~/Applications/Clip.app` and a per-user launch agent. The app starts hidden, starts at login, and restarts after an exit. The existing `Clip` app, storage, and bundle names are retained for compatibility.
 
-```sh
-launchctl bootout "gui/$(id -u)/com.moritz.clip"
-```
+Enable **Clip** in **System Settings → Privacy & Security → Accessibility** for automatic paste. Without that permission, Enter still copies the selected text or first media payload to the clipboard.
 
-The old prototype exited without a retained stderr log or macOS crash report;
-its original exit cause is unknown. The installed app is independent of the
-agent session's shell lifecycle.
+Read the [installation and troubleshooting guide](docs/INSTALL.md) for prerequisites, stopping the service, and removing it without deleting history.
+
+## Keyboard controls
+
+The development hotkey is currently tied to physical W: **⌘⇧W on a US keyboard**, or **⌘⇧U on DeutschADNW**. It is not configurable yet. Check for conflicts with other apps.
+
+| Key | Action |
+| --- | --- |
+| Type | Search history |
+| ↑ / ↓ | Browse results |
+| X while browsing | Mark or unmark a clip |
+| → | Open a larger preview |
+| ← | Return to search |
+| Enter | Paste the current clip, or all marked clips |
+| Escape | Leave the preview, clear marks, or hide the panel |
+
+X still types normally in the search field. Press Left or click the search field to edit a query; Up/Down returns to list browsing.
+
+Marked clips stay selected across searches and filters. Adjacent text and link clips are joined with a newline. Images and files are pasted as separate native payloads. Switching apps, changing the clipboard, or reopening Clipglass cancels the remaining media queue.
+
+## Local data and privacy
+
+History is stored in `~/Library/Application Support/Clip/`. Text lives in SQLite; images are separate files. Screenshot OCR runs on your Mac. Thumbnails are decoded on a background worker and cached only in memory.
+
+**History is not encrypted. Password-manager exclusions are incomplete.** Tokens, passwords, or other sensitive content copied from a browser or terminal can be saved in history. Do not treat this development build as a secret store.
+
+The app has no application network client, account, sync, or analytics service. Document previews use macOS Quick Look and installed preview extensions.
+
+## Current limits
+
+- Rich-format clipboard preservation and capture of multiple files at once are not verified.
+- Browsing uses a cached recent list; paging is not implemented.
+- Type filters apply to the current result set, not the whole database.
+- Capture, search, and large-file writes can still block the main thread. OCR and thumbnail decoding run off the main thread.
+- Mixed/media batches use a 250 ms gap. The destination must accept each type and process pastes within that interval.
+- Shortcut configuration, an in-app permissions screen, Developer ID signing, and notarization are not implemented.
 
 ## Development
 
 ```sh
-cargo test
-cargo run -- search "example"
+cargo test --locked
+cargo run --locked -- search "example"
 ```
 
-`cargo run` without arguments starts the native app. Do not use that as a host
-GUI test. Test the UI in a macOS Space, with synthetic clipboard fixtures and
-muted audio. Never copy real clipboard history into a shared test environment.
+The search command prints a hit count, not clipboard contents. Search uses token prefixes rather than arbitrary substrings.
 
-## VM validation (2026-11-20)
+GUI checks use synthetic history in an isolated macOS VM. Do not copy personal clipboard databases into a shared test machine. See [testing and measured query timings](docs/TESTING.md).
 
-Tested an isolated debug app in `local:mac-for-desktop-testing`, with synthetic
-data and audio muted. The host app was not relaunched or replaced.
+## License
 
-- Vision recognized `BANANAS 4827` from a generated screenshot.
-- Searching `bananas` found that screenshot and showed the OCR text.
-- Quick Look rendered a text-file document preview.
-- Right arrow focused the preview: Select All and Copy returned the OCR text.
-- Left arrow returned to the search field.
-- The global hotkey reopened the panel from a separate TextEdit instance.
-- Enter pasted into TextEdit. Saving the result preserved the exact bytes
-  `    let answer = 42;\n\n`, including indentation and trailing newlines.
-
-The redesigned build was also tested with synthetic data: OCR search and
-preview Select All/Copy, image type filtering, empty results, repeated hotkey
-hide/show, and paste through both Enter and the footer button. Saved TextEdit
-output matched the exact whitespace fixture. Native Quick Look was checked
-separately. Packaging and hidden launch were tested through the installer;
-launchd restarted the process after deliberate termination. No new host GUI
-automation was used. Only VM test apps received automated Accessibility grants.
-
-## Still required before replacing Raycast
-
-- Verify rich clipboard formats and multi-file captures/paste.
-- Move capture, large-file writes and search off the main thread.
-- Add paging so browsing is not limited to the cached recent entries.
-- Benchmark UI opening/search against large synthetic histories.
-- Developer ID signing, notarization and in-app permissions UX.
-- Database-wide type filtering and search highlighting. Time-range filters are backlogged.
-
-## Measured storage performance
-
-An isolated debug-build test with 100,000 synthetic entries (40 samples each)
-measured these p95 times on this Mac:
-
-| Operation | Initial implementation | Recency-ordered FTS index |
-| --- | ---: | ---: |
-| Recent 80 | 0.12 ms | 0.21 ms |
-| Rare search | 18.15 ms | 0.67 ms |
-| Common search | 176.47 ms | 7.08 ms |
-| No matches | 16.03 ms | 0.11 ms |
-
-Search is token-prefix based, not arbitrary substring matching. The unified
-FTS row per entry includes its title, text and OCR. Its row order follows copy
-recency, so searches can stop after the requested number of matches. OCR updates
-retain the original order. A repeated copy moves the entry back to the top.
-
-Run the benchmark with `cargo test benchmark_100k -- --ignored --nocapture`.
-These are warm storage-query timings, not UI latency or a Raycast comparison.
-Encryption alone does not establish Raycast's bottleneck.
+A proposed MIT license is included in the [private launch packet](docs/launch/LICENSE-MIT.proposed.txt). It is a proposal for approval, not an announcement that this private repository has been released under that license.
