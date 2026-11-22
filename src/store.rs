@@ -37,11 +37,21 @@ pub fn data_dir() -> PathBuf {
 
 impl Store {
     pub fn thumbnail_path(&self, id: &str) -> Option<PathBuf> {
-        let path: String = self.conn.query_row(
-            "SELECT file_path FROM parts WHERE entry_id=?1 AND kind='image' AND file_path IS NOT NULL AND file_path<>'' LIMIT 1",
-            [id], |row| row.get(0),
+        let mut statement = self.conn.prepare(
+            "SELECT kind, file_path FROM parts WHERE entry_id=?1 AND kind IN ('image', 'file') AND file_path IS NOT NULL AND file_path<>'' ORDER BY CASE kind WHEN 'image' THEN 0 ELSE 1 END, rowid",
         ).ok()?;
-        Some(recovered_asset_path(&path))
+        let parts = statement.query_map([id], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        }).ok()?;
+        parts.filter_map(Result::ok).find_map(|(kind, path)| {
+            if kind == "image" {
+                return Some(recovered_asset_path(&path));
+            }
+            let path = PathBuf::from(path);
+            let extension = path.extension()?.to_str()?.to_ascii_lowercase();
+            matches!(extension.as_str(), "png" | "jpg" | "jpeg" | "gif" | "tiff" | "tif" | "heic" | "heif" | "webp" | "bmp" | "ico" | "avif")
+                .then_some(path)
+        })
     }
 
     pub fn list_title(&self, hit: &Hit) -> String {
@@ -647,6 +657,29 @@ mod tests {
             fixture.store.preview(&hits[0].id).unwrap().text,
             "https://example.com/path"
         );
+    }
+
+    #[test]
+    fn image_files_get_thumbnails_without_changing_their_paste_type() {
+        let mut fixture = Fixture::new();
+        for name in ["screenshot.png", "IMG_8176.PNG", "photo.jpeg", "photo.HEIC", "notes.txt"] {
+            let path = fixture.store.files.join(name);
+            std::fs::write(&path, b"synthetic path fixture").unwrap();
+            assert!(fixture.store.insert_file(&path, None));
+            let hit = fixture.store.search(name.split('.').next().unwrap(), 10)
+                .into_iter().find(|hit| hit.title == name).unwrap();
+            let thumbnail = fixture.store.thumbnail_path(&hit.id);
+            if name.ends_with(".txt") {
+                assert!(thumbnail.is_none());
+            } else {
+                assert_eq!(thumbnail, Some(path.clone()));
+            }
+            let preview = fixture.store.preview(&hit.id).unwrap();
+            assert_eq!(hit.kind, "file");
+            assert_eq!(preview.kind, "file");
+            assert_eq!(preview.file_path, Some(path));
+            assert!(preview.image_path.is_none());
+        }
     }
 
     #[test]

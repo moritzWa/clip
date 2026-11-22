@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024" role="img" aria-label="Stack: two overlapping glass sheets on graphite">
+<title>Stack: two overlapping glass sheets on graphite</title>
+<defs>
+  <linearGradient id="blue" x1="0" y1="0" x2=".7" y2="1"><stop stop-color="#78dbff"/><stop offset=".42" stop-color="#248bef"/><stop offset="1" stop-color="#1654c1"/></linearGradient>
+  <linearGradient id="dark" x2="0" y2="1"><stop stop-color="#42464e"/><stop offset=".55" stop-color="#25282f"/><stop offset="1" stop-color="#14171e"/></linearGradient>
+  <linearGradient id="silver" x1=".2" y1="0" x2=".8" y2="1"><stop stop-color="#fff"/><stop offset=".35" stop-color="#f3f5f7"/><stop offset="1" stop-color="#c2cbd6"/></linearGradient>
+  <linearGradient id="glass" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fff" stop-opacity=".98"/><stop offset=".38" stop-color="#f0fcff" stop-opacity=".91"/><stop offset="1" stop-color="#c5e7fa" stop-opacity=".82"/></linearGradient>
+  <linearGradient id="aqua" x2=".7" y2="1"><stop stop-color="#b7fff7"/><stop offset="1" stop-color="#42bcf2"/></linearGradient>
+  <linearGradient id="edge" x2=".5" y2="1"><stop stop-color="#fff" stop-opacity=".9"/><stop offset=".45" stop-color="#fff" stop-opacity=".12"/><stop offset="1" stop-color="#fff" stop-opacity=".3"/></linearGradient>
+  <linearGradient id="clip" x1="0" y1="0" x2=".3" y2="1"><stop stop-color="#fff"/><stop offset=".55" stop-color="#ebf1f7"/><stop offset="1" stop-color="#b3c5d9"/></linearGradient>
+  <filter id="object" x="-40%" y="-40%" width="180%" height="200%"><feDropShadow dx="0" dy="20" stdDeviation="16" flood-color="#031738" flood-opacity=".3"/><feDropShadow dx="0" dy="3" stdDeviation="2" flood-color="#082c59" flood-opacity=".2"/></filter>
+  <filter id="tile" x="-30%" y="-30%" width="160%" height="170%"><feDropShadow dx="0" dy="14" stdDeviation="12" flood-opacity=".22"/></filter>
+</defs>
+<path d="M282 64H742C896 64 960 128 960 282V742C960 896 896 960 742 960H282C128 960 64 896 64 742V282C64 128 128 64 282 64Z" fill="url(#dark)" filter="url(#tile)"/>
+<path d="M282 64H742C896 64 960 128 960 282V742C960 896 896 960 742 960H282C128 960 64 896 64 742V282C64 128 128 64 282 64Z" transform="translate(4 4) scale(.9921875)" fill="none" stroke="url(#edge)" stroke-width="3"/>
+
+<g filter="url(#object)">
+  <rect x="278" y="237" width="390" height="486" rx="58" fill="url(#aqua)" transform="rotate(-9 473 480)" stroke="url(#edge)" stroke-width="4"/>
+  <rect x="367" y="328" width="390" height="486" rx="58" fill="url(#glass)" stroke="url(#edge)" stroke-width="5"/>
+  <rect x="378" y="339" width="368" height="464" rx="47" fill="none" stroke="#fff" stroke-opacity=".38" stroke-width="2"/>
+  <path d="M443 455H680M443 544H680M443 633H595" fill="none" stroke="#5689b1" stroke-opacity=".56" stroke-width="22" stroke-linecap="round"/>
+</g></svg>

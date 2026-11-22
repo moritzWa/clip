@@ -12,7 +12,7 @@ A keyboard-first clipboard history for macOS, built in Rust with native AppKit v
 
 - Keeps local history without an automatic expiry limit.
 - Searches text, links, and text recognized inside screenshots with Apple Vision.
-- Shows screenshot thumbnails, selectable text, and native Quick Look document previews.
+- Shows screenshot thumbnails, including screenshots copied as image files, selectable text, and native Quick Look document previews.
 - Opens larger previews with Right Arrow. Pinch to zoom, scroll to pan, or use the Fit and zoom buttons.
 - Marks clips with X and pastes them in copy order, oldest first.
 - Keeps indentation and blank lines when pasting. Only list titles drop leading whitespace.

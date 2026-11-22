@@ -25,6 +25,10 @@ muted. No private clipboard database was moved into the VM.
 - A native receiver received text, file URL, and image payloads in copy order.
 - Reopening the panel cancelled the remaining media queue.
 - The thumbnail worker delivered a 64×40 thumbnail and reused the cache.
+- Image files receive thumbnails too, including uppercase `.PNG` filenames.
+  A synthetic image copied as a file showed its thumbnail in the native list.
+  A store regression test covers PNG, JPEG, HEIC, and non-image file paths, and
+  checks that file previews retain their native file-paste type.
 - Old blank list titles displayed the first nonblank line. A paste receiver
   confirmed that the original spaces, newlines, and indentation remained intact.
 - The packaged app launched hidden and launchd restarted it after termination.

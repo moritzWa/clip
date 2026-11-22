@@ -125,7 +125,7 @@ define_class!(
                 .cloned();
             hit.map(|hit| {
                 let title = self.ivars().store.borrow().list_title(&hit);
-                let thumbnail = if hit.kind == "image" {
+                let thumbnail = if hit.kind == "image" || hit.kind == "file" {
                     let path = self.ivars().store.borrow().thumbnail_path(&hit.id);
                     path.and_then(|path| self.ivars().thumbnails.borrow_mut().get(&path))
                 } else { None };
