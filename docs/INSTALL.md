@@ -32,7 +32,8 @@ sh scripts/install.sh "$PWD/target/debug/clip"
 
 The installer:
 
-- Packages the binary as `/Applications/Clipglass.app` with an ad-hoc signature.
+- Packages the binary as `/Applications/Clipglass.app`. It uses an available
+  Developer ID certificate, or an ad-hoc signature if none is available.
 - Requires write access to `/Applications`.
 - Preserves replaced bundles and the older `~/Applications/Clip.app` as timestamped backups in `~/Applications`.
 - Writes `~/Library/LaunchAgents/com.moritz.clip.plist`.
@@ -44,6 +45,11 @@ The visible app name is Clipglass. The bundle ID, `com.moritz.clip`, and storage
 ## Open history
 
 The current internal shortcut is **Command+Shift+physical W**. That is **⌘⇧W on US** and **⌘⇧U on DeutschADNW**. Disable any conflicting binding in another app. There is no shortcut settings screen yet.
+
+**⌘.** opens image-only history. Inside the panel it toggles Images/All Types.
+It resolves to physical R on DeutschADNW and physical Period on US. The normal
+history hotkey opens All Types. This overrides the conventional Cmd+. Cancel
+action while Clipglass is running. No Karabiner change is needed for this shortcut.
 
 ## Allow automatic paste
 
@@ -58,7 +64,11 @@ launchctl kickstart -k "gui/$(id -u)/com.moritz.clip"
 
 Without the grant, Enter copies text to the clipboard but cannot simulate a paste into another app. Mixed/media batches cannot be delivered automatically without the grant.
 
-Ad-hoc signatures can change when rebuilding. macOS may require you to remove and re-add the app's Accessibility entry after an update.
+Ad-hoc signatures change when rebuilding. macOS may require you to remove and
+re-add the app's Accessibility entry after an update. A Developer ID signature
+provides a stable identity across builds. `CLIP_SIGN_IDENTITY` can select a
+specific signing identity; set it to `-` to force ad-hoc signing. Local signing
+does not notarize the app or create a public release.
 
 ## Troubleshooting
 

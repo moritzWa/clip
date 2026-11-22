@@ -42,6 +42,12 @@ Read the [installation and troubleshooting guide](docs/INSTALL.md) for prerequis
 
 The development hotkey is currently tied to physical W: **⌘⇧W on a US keyboard**, or **⌘⇧U on DeutschADNW**. It is not configurable yet. Check for conflicts with other apps.
 
+**⌘. opens image-only history from any app.** While Clipglass is open, the same
+shortcut toggles between Images and All Types without clearing your query.
+The normal history hotkey reopens All Types. On DeutschADNW, period is physical R;
+on US it is physical Period. Registration failures are reported in the log.
+This global shortcut replaces the conventional Cancel action in apps that use ⌘.
+
 | Key | Action |
 | --- | --- |
 | Type | Search history |
@@ -71,10 +77,13 @@ The app has no application network client, account, sync, or analytics service. 
 
 - Rich-format clipboard preservation and capture of multiple files at once are not verified.
 - Browsing uses a cached recent list; paging is not implemented.
-- Type filters apply to the current result set, not the whole database.
+- Type filters search the database before limiting results. Images includes
+  image files as well as copied image payloads.
 - Capture, search, and large-file writes can still block the main thread. OCR and thumbnail decoding run off the main thread.
 - Mixed/media batches use a 250 ms gap. The destination must accept each type and process pastes within that interval.
-- Shortcut configuration, an in-app permissions screen, Developer ID signing, and notarization are not implemented.
+- Shortcut configuration, an in-app permissions screen, notarization, and
+  published binary downloads are not implemented. Local packaging uses an
+  available Developer ID certificate, with an ad-hoc fallback.
 
 ## Development
 

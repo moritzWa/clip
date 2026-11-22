@@ -30,6 +30,10 @@ pub struct Store {
     files: PathBuf,
 }
 
+const IMAGE_EXTENSIONS: &[&str] = &[
+    "png", "jpg", "jpeg", "gif", "tiff", "tif", "heic", "heif", "webp", "bmp", "ico", "avif",
+];
+
 pub fn data_dir() -> PathBuf {
     let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
     PathBuf::from(home).join("Library/Application Support/Clip")
@@ -40,16 +44,19 @@ impl Store {
         let mut statement = self.conn.prepare(
             "SELECT kind, file_path FROM parts WHERE entry_id=?1 AND kind IN ('image', 'file') AND file_path IS NOT NULL AND file_path<>'' ORDER BY CASE kind WHEN 'image' THEN 0 ELSE 1 END, rowid",
         ).ok()?;
-        let parts = statement.query_map([id], |row| {
-            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
-        }).ok()?;
+        let parts = statement
+            .query_map([id], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+            })
+            .ok()?;
         parts.filter_map(Result::ok).find_map(|(kind, path)| {
             if kind == "image" {
                 return Some(recovered_asset_path(&path));
             }
             let path = PathBuf::from(path);
             let extension = path.extension()?.to_str()?.to_ascii_lowercase();
-            matches!(extension.as_str(), "png" | "jpg" | "jpeg" | "gif" | "tiff" | "tif" | "heic" | "heif" | "webp" | "bmp" | "ico" | "avif")
+            IMAGE_EXTENSIONS
+                .contains(&extension.as_str())
                 .then_some(path)
         })
     }
@@ -226,6 +233,53 @@ impl Store {
                 eprintln!("clip: search failed: {error}");
                 Vec::new()
             })
+    }
+
+    /// Apply type constraints before LIMIT, across the database rather than
+    /// filtering the cached recent/search page. Image files count as images
+    /// without changing their native clipboard payload type.
+    pub fn filtered(&self, query: &str, limit: usize, kind: Option<&str>) -> Vec<Hit> {
+        let image_files = IMAGE_EXTENSIONS
+            .iter()
+            .map(|extension| format!("lower(p.file_path) LIKE '%.{extension}'"))
+            .collect::<Vec<_>>()
+            .join(" OR ");
+        let predicate = match kind {
+            Some("image") => format!(
+                "EXISTS (SELECT 1 FROM parts p WHERE p.entry_id=e.id AND (p.kind='image' OR (p.kind='file' AND ({image_files}))))"
+            ),
+            Some("file") => {
+                "EXISTS (SELECT 1 FROM parts p WHERE p.entry_id=e.id AND p.kind='file')".into()
+            }
+            Some("link") => {
+                "EXISTS (SELECT 1 FROM parts p WHERE p.entry_id=e.id AND p.kind='link')".into()
+            }
+            Some("text") => {
+                "EXISTS (SELECT 1 FROM parts p WHERE p.entry_id=e.id AND p.kind='text')".into()
+            }
+            _ => "1".into(),
+        };
+        let fts = fts_query(query);
+        let (join, search, order) = if fts.is_empty() {
+            (
+                "",
+                "?1 = ''",
+                "COALESCE(e.updated_at,e.created_at) DESC,e.id DESC",
+            )
+        } else {
+            (
+                "JOIN entry_search s ON s.entry_id=e.id",
+                "entry_search MATCH ?1",
+                "s.rowid DESC",
+            )
+        };
+        let sql = format!(
+            "SELECT e.id,COALESCE(e.title,''),e.created_at,COALESCE(e.source_name,''),COALESCE(e.categories,'') FROM entries e {join} WHERE {search} AND ({predicate}) ORDER BY {order} LIMIT ?2"
+        );
+        let mut stmt = self.conn.prepare(&sql).expect("filtered history");
+        stmt.query_map(params![fts, limit as i64], row_hit)
+            .map(|rows| rows.filter_map(Result::ok).collect())
+            .unwrap_or_default()
     }
 
     pub fn preview(&self, id: &str) -> Option<Preview> {
@@ -660,14 +714,53 @@ mod tests {
     }
 
     #[test]
+    fn image_filter_includes_image_files_and_searches_beyond_the_recent_page() {
+        let mut fixture = Fixture::new();
+        let path = fixture.store.files.join("needle-screenshot.PNG");
+        std::fs::write(&path, b"synthetic file").unwrap();
+        fixture.store.insert_file(&path, None);
+        for i in 0..220 {
+            fixture.store.insert_text(&format!("needle text {i}"), None);
+        }
+        assert!(
+            fixture
+                .store
+                .recent(200)
+                .iter()
+                .all(|hit| hit.kind == "text")
+        );
+        let images = fixture.store.filtered("", 80, Some("image"));
+        assert_eq!(images.len(), 1);
+        assert_eq!(images[0].title, "needle-screenshot.PNG");
+        assert_eq!(images[0].kind, "file");
+        assert_eq!(fixture.store.filtered("needle", 80, Some("image")).len(), 1);
+        assert!(
+            fixture
+                .store
+                .filtered("absent", 80, Some("image"))
+                .is_empty()
+        );
+    }
+
+    #[test]
     fn image_files_get_thumbnails_without_changing_their_paste_type() {
         let mut fixture = Fixture::new();
-        for name in ["screenshot.png", "IMG_8176.PNG", "photo.jpeg", "photo.HEIC", "notes.txt"] {
+        for name in [
+            "screenshot.png",
+            "IMG_8176.PNG",
+            "photo.jpeg",
+            "photo.HEIC",
+            "notes.txt",
+        ] {
             let path = fixture.store.files.join(name);
             std::fs::write(&path, b"synthetic path fixture").unwrap();
             assert!(fixture.store.insert_file(&path, None));
-            let hit = fixture.store.search(name.split('.').next().unwrap(), 10)
-                .into_iter().find(|hit| hit.title == name).unwrap();
+            let hit = fixture
+                .store
+                .search(name.split('.').next().unwrap(), 10)
+                .into_iter()
+                .find(|hit| hit.title == name)
+                .unwrap();
             let thumbnail = fixture.store.thumbnail_path(&hit.id);
             if name.ends_with(".txt") {
                 assert!(thumbnail.is_none());

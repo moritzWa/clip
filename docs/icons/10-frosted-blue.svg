@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024" role="img" aria-label="Frosted Blue: a brighter glass clipboard with stronger contrast">
+<title>Frosted Blue: a brighter glass clipboard with stronger contrast</title>
+<defs>
+  <linearGradient id="blue" x1="0" y1="0" x2=".7" y2="1"><stop stop-color="#78dbff"/><stop offset=".42" stop-color="#248bef"/><stop offset="1" stop-color="#1654c1"/></linearGradient>
+  <linearGradient id="dark" x2="0" y2="1"><stop stop-color="#42464e"/><stop offset=".55" stop-color="#25282f"/><stop offset="1" stop-color="#14171e"/></linearGradient>
+  <linearGradient id="silver" x1=".2" y1="0" x2=".8" y2="1"><stop stop-color="#fff"/><stop offset=".35" stop-color="#f3f5f7"/><stop offset="1" stop-color="#c2cbd6"/></linearGradient>
+  <linearGradient id="glass" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fff" stop-opacity=".98"/><stop offset=".38" stop-color="#f0fcff" stop-opacity=".91"/><stop offset="1" stop-color="#c5e7fa" stop-opacity=".82"/></linearGradient>
+  <linearGradient id="aqua" x2=".7" y2="1"><stop stop-color="#b7fff7"/><stop offset="1" stop-color="#42bcf2"/></linearGradient>
+  <linearGradient id="edge" x2=".5" y2="1"><stop stop-color="#fff" stop-opacity=".9"/><stop offset=".45" stop-color="#fff" stop-opacity=".12"/><stop offset="1" stop-color="#fff" stop-opacity=".3"/></linearGradient>
+  <linearGradient id="clip" x1="0" y1="0" x2=".3" y2="1"><stop stop-color="#fff"/><stop offset=".55" stop-color="#ebf1f7"/><stop offset="1" stop-color="#b3c5d9"/></linearGradient>
+  <filter id="object" x="-40%" y="-40%" width="180%" height="200%"><feDropShadow dx="0" dy="20" stdDeviation="16" flood-color="#031738" flood-opacity=".3"/><feDropShadow dx="0" dy="3" stdDeviation="2" flood-color="#082c59" flood-opacity=".2"/></filter>
+  <filter id="tile" x="-30%" y="-30%" width="160%" height="170%"><feDropShadow dx="0" dy="14" stdDeviation="12" flood-opacity=".22"/></filter>
+
+  <linearGradient id="indigo" x1=".12" y1="0" x2=".88" y2="1"><stop stop-color="#a0c0ff"/><stop offset=".32" stop-color="#506CF7"/><stop offset=".7" stop-color="#6744e9"/><stop offset="1" stop-color="#25258b"/></linearGradient>
+  <radialGradient id="bloom" cx=".18" cy=".12" r=".9"><stop stop-color="#c1f4ff" stop-opacity=".28"/><stop offset=".6" stop-color="#92b8ff" stop-opacity="0"/><stop offset="1" stop-color="#5036ce" stop-opacity="0"/></radialGradient>
+  <linearGradient id="clear" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fff" stop-opacity=".30"/><stop offset=".32" stop-color="#e4efff" stop-opacity=".09"/><stop offset=".67" stop-color="#e0e9ff" stop-opacity=".16"/><stop offset="1" stop-color="#fff" stop-opacity=".33"/></linearGradient>
+  <linearGradient id="rear" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#d2faff" stop-opacity=".24"/><stop offset=".7" stop-color="#dddbff" stop-opacity=".06"/><stop offset="1" stop-color="#fff" stop-opacity=".19"/></linearGradient>
+  <linearGradient id="rim" x1="0" y1="0" x2=".8" y2="1"><stop stop-color="white" stop-opacity=".96"/><stop offset=".35" stop-color="#e8f4ff" stop-opacity=".34"/><stop offset=".62" stop-color="#c8d6ff" stop-opacity=".13"/><stop offset="1" stop-color="white" stop-opacity=".73"/></linearGradient>
+  <linearGradient id="chrome" x2="0" y2="1"><stop stop-color="#fff"/><stop offset=".16" stop-color="#e9edf5"/><stop offset=".42" stop-color="#b7c0d1"/><stop offset=".49" stop-color="#7f8b9f"/><stop offset=".53" stop-color="#dfe7f3"/><stop offset=".78" stop-color="#f5f8fc"/><stop offset="1" stop-color="#9aa7bb"/></linearGradient>
+  <linearGradient id="alloy" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fff"/><stop offset=".28" stop-color="#edf0f6"/><stop offset=".55" stop-color="#ced5e2"/><stop offset=".78" stop-color="#f2f4f8"/><stop offset="1" stop-color="#a9b6cb"/></linearGradient>
+  <radialGradient id="orb" cx=".28" cy=".18" r=".9"><stop stop-color="#a3efff"/><stop offset=".34" stop-color="#617fff"/><stop offset=".72" stop-color="#506CF7"/><stop offset="1" stop-color="#303fc3"/></radialGradient>
+  <filter id="soft" x="-40%" y="-40%" width="180%" height="190%"><feDropShadow dx="0" dy="16" stdDeviation="14" flood-color="#13134c" flood-opacity=".20"/></filter>
+
+  <linearGradient id="quiet-blue"><stop stop-color="#607ccc"/><stop offset="1" stop-color="#607ccc"/></linearGradient>
+  <linearGradient id="pale-blue"><stop stop-color="#7189cb"/><stop offset="1" stop-color="#7189cb"/></linearGradient>
+  <radialGradient id="daylight" cx=".16" cy=".08" r="1.08"><stop stop-color="white" stop-opacity=".4"/><stop offset=".55" stop-color="white" stop-opacity=".04"/><stop offset="1" stop-color="#000" stop-opacity=".2"/></radialGradient>
+  <linearGradient id="neutral-glass" x1="0" y1="0" x2=".9" y2="1"><stop stop-color="#fff" stop-opacity=".56"/><stop offset=".37" stop-color="#fff" stop-opacity=".25"/><stop offset=".75" stop-color="#fff" stop-opacity=".20"/><stop offset="1" stop-color="#fff" stop-opacity=".43"/></linearGradient>
+  <linearGradient id="frosted-glass" x1="0" y1="0" x2=".9" y2="1"><stop stop-color="#fff" stop-opacity=".72"/><stop offset=".4" stop-color="#fff" stop-opacity=".40"/><stop offset=".8" stop-color="#fff" stop-opacity=".33"/><stop offset="1" stop-color="#fff" stop-opacity=".56"/></linearGradient>
+</defs>
+<path d="M282 64H742C896 64 960 128 960 282V742C960 896 896 960 742 960H282C128 960 64 896 64 742V282C64 128 128 64 282 64Z" fill="url(#quiet-blue)" filter="url(#tile)"/>
+<path d="M282 64H742C896 64 960 128 960 282V742C960 896 896 960 742 960H282C128 960 64 896 64 742V282C64 128 128 64 282 64Z" transform="translate(4 4) scale(.9921875)" fill="none" stroke="url(#edge)" stroke-width="3"/>
+<path d="M282 64H742C896 64 960 128 960 282V742C960 896 896 960 742 960H282C128 960 64 896 64 742V282C64 128 128 64 282 64Z" fill="url(#daylight)"/><g filter="url(#soft)"><rect x="261" y="218" width="390" height="500" rx="64" fill="white" fill-opacity=".07" stroke="white" stroke-opacity=".38" stroke-width="3" transform="rotate(-9 456 468)"/><rect x="354" y="324" width="394" height="476" rx="64" fill="url(#frosted-glass)" stroke="url(#rim)" stroke-width="6"/>
+<rect x="365" y="335" width="372" height="454" rx="53" fill="none" stroke="white" stroke-opacity=".30" stroke-width="2"/>
+<path d="M374 474V393Q374 344 423 344H496" fill="none" stroke="white" stroke-opacity=".7" stroke-width="3" stroke-linecap="round"/></g><g filter="url(#soft)"><rect x="439" y="290" width="224" height="76" rx="29" fill="url(#chrome)" stroke="#eaf0fc" stroke-width="2"/>
+<rect x="448" y="299" width="206" height="58" rx="20" fill="none" stroke="#fff" stroke-opacity=".36" stroke-width="2"/>
+<path d="M492 329H610" stroke="#68758a" stroke-opacity=".55" stroke-width="8" stroke-linecap="round"/></g></svg>

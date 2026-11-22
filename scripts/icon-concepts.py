@@ -96,4 +96,27 @@ icon("09-orbit", "Orbit: a silver plate with an oversized blue glass lens", "dar
 <g filter="url(#soft)"><circle cx="652" cy="694" r="79" fill="url(#chrome)"/>
 <circle cx="652" cy="694" r="73" fill="url(#orb)" stroke="#bccdff" stroke-width="2"/>
 <path d="M605 667C616 635 645 625 668 634" fill="none" stroke="#e9f8ff" stroke-opacity=".65" stroke-width="5" stroke-linecap="round"/></g>''')
+# Round three: one blue pigment, varied illumination instead of hue shifts.
+# Front pane is brighter; rear pane is deliberately quieter. No colored dot.
+defs = defs.replace("</defs>", '''
+  <linearGradient id="quiet-blue"><stop stop-color="#607ccc"/><stop offset="1" stop-color="#607ccc"/></linearGradient>
+  <linearGradient id="pale-blue"><stop stop-color="#7189cb"/><stop offset="1" stop-color="#7189cb"/></linearGradient>
+  <radialGradient id="daylight" cx=".16" cy=".08" r="1.08"><stop stop-color="white" stop-opacity=".4"/><stop offset=".55" stop-color="white" stop-opacity=".04"/><stop offset="1" stop-color="#000" stop-opacity=".2"/></radialGradient>
+  <linearGradient id="neutral-glass" x1="0" y1="0" x2=".9" y2="1"><stop stop-color="#fff" stop-opacity=".56"/><stop offset=".37" stop-color="#fff" stop-opacity=".25"/><stop offset=".75" stop-color="#fff" stop-opacity=".20"/><stop offset="1" stop-color="#fff" stop-opacity=".43"/></linearGradient>
+  <linearGradient id="frosted-glass" x1="0" y1="0" x2=".9" y2="1"><stop stop-color="#fff" stop-opacity=".72"/><stop offset=".4" stop-color="#fff" stop-opacity=".40"/><stop offset=".8" stop-color="#fff" stop-opacity=".33"/><stop offset="1" stop-color="#fff" stop-opacity=".56"/></linearGradient>
+</defs>''')
+lighting = f'<path d="{shape}" fill="url(#daylight)"/>'
+quiet_rear = '''<rect x="261" y="218" width="390" height="500" rx="64" fill="white" fill-opacity=".07" stroke="white" stroke-opacity=".38" stroke-width="3" transform="rotate(-9 456 468)"/>'''
+
+def pane(material):
+    return f'''<rect x="354" y="324" width="394" height="476" rx="64" fill="url(#{material})" stroke="url(#rim)" stroke-width="6"/>
+<rect x="365" y="335" width="372" height="454" rx="53" fill="none" stroke="white" stroke-opacity=".30" stroke-width="2"/>
+<path d="M374 474V393Q374 344 423 344H496" fill="none" stroke="white" stroke-opacity=".7" stroke-width="3" stroke-linecap="round"/>'''
+
+icon("04-dual-glass", "Dual Glass: calmer blue lighting, brighter clear clipboard", "quiet-blue",
+     lighting + '<g filter="url(#soft)">' + quiet_rear + pane("neutral-glass") + '</g>' + clip)
+icon("10-frosted-blue", "Frosted Blue: a brighter glass clipboard with stronger contrast", "quiet-blue",
+     lighting + '<g filter="url(#soft)">' + quiet_rear + pane("frosted-glass") + '</g>' + clip)
+icon("11-soft-blue", "Soft Blue: quieter blue pigment and frosted glass", "pale-blue",
+     lighting + '<g filter="url(#soft)">' + quiet_rear + pane("frosted-glass") + '</g>' + clip)
 print(root)

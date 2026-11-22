@@ -41,7 +41,7 @@ const kCGEventFlagMaskCommand: u64 = 0x100000;
 const kUCKeyActionDisplay: u16 = 3;
 const kUCKeyTranslateNoDeadKeysBit: u32 = 1;
 
-fn keycode_for_char(want: char) -> Option<u16> {
+pub fn keycode_for_char(want: char) -> Option<u16> {
     unsafe {
         let source = TISCopyCurrentKeyboardInputSource();
         if source.is_null() {

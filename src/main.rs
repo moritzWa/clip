@@ -1,3 +1,4 @@
+mod clipboard;
 mod design;
 mod image_zoom;
 mod ocr;

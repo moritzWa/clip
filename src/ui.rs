@@ -68,7 +68,8 @@ struct Ivars {
     meta: RefCell<Option<Retained<NSTextField>>>,
     list_scroll: RefCell<Option<Retained<NSScrollView>>>,
     text_scroll: RefCell<Option<Retained<NSScrollView>>>,
-    last_change: Cell<isize>,
+    capture: RefCell<crate::clipboard::Capture>,
+    image_hotkey_id: Cell<Option<u32>>,
     ignore_change: Cell<isize>,
     prev_pid: Cell<i32>,
     previewing: Cell<bool>,
@@ -236,7 +237,8 @@ impl ClipPanel {
             meta: RefCell::new(None),
             list_scroll: RefCell::new(None),
             text_scroll: RefCell::new(None),
-            last_change: Cell::new(0),
+            capture: RefCell::new(crate::clipboard::Capture::new(0)),
+            image_hotkey_id: Cell::new(None),
             ignore_change: Cell::new(-1),
             prev_pid: Cell::new(0),
             previewing: Cell::new(false),
@@ -274,7 +276,7 @@ impl ClipPanel {
         this.build_views(mtm);
         this.setDelegate(Some(ProtocolObject::from_ref(&*this)));
         let pb = NSPasteboard::generalPasteboard();
-        this.ivars().last_change.set(pb.changeCount());
+        *this.ivars().capture.borrow_mut() = crate::clipboard::Capture::new(pb.changeCount());
         this
     }
 
@@ -730,13 +732,36 @@ impl ClipPanel {
     fn poll_hotkey(&self) {
         while let Ok(event) = GlobalHotKeyEvent::receiver().try_recv() {
             if event.state == HotKeyState::Pressed {
+                if Some(event.id) == self.ivars().image_hotkey_id.get() {
+                    let index = if self.isVisible() && self.ivars().filter_index.get() == 3 {
+                        0
+                    } else {
+                        3
+                    };
+                    self.set_filter(index);
+                    if !self.isVisible() {
+                        self.show_panel();
+                    } else if self.ivars().previewing.get() {
+                        self.focus_search();
+                    }
+                    continue;
+                }
                 if self.isVisible() {
                     self.hide_panel();
                 } else {
+                    self.set_filter(0);
                     self.show_panel();
                 }
             }
         }
+    }
+
+    fn set_filter(&self, index: isize) {
+        self.ivars().filter_index.set(index);
+        if let Some(filter) = self.ivars().filter.borrow().as_ref() {
+            filter.selectItemAtIndex(index);
+        }
+        self.refresh_results();
     }
 
     fn poll_query(&self) {
@@ -753,11 +778,6 @@ impl ClipPanel {
 
     fn refresh_results(&self) {
         let text = self.ivars().query.borrow().clone();
-        let hits = if text.trim().is_empty() {
-            self.ivars().recent.borrow().clone()
-        } else {
-            self.ivars().store.borrow().search(&text, 80)
-        };
         let kind = match self.ivars().filter_index.get() {
             1 => Some("text"),
             2 => Some("link"),
@@ -765,10 +785,14 @@ impl ClipPanel {
             4 => Some("file"),
             _ => None,
         };
-        *self.ivars().rows.borrow_mut() = hits
-            .into_iter()
-            .filter(|hit| kind.is_none_or(|k| hit.kind == k))
-            .collect();
+        let hits = if kind.is_some() {
+            self.ivars().store.borrow().filtered(&text, 200, kind)
+        } else if text.trim().is_empty() {
+            self.ivars().recent.borrow().clone()
+        } else {
+            self.ivars().store.borrow().search(&text, 80)
+        };
+        *self.ivars().rows.borrow_mut() = hits;
         if let Some(section) = self.ivars().section.borrow().as_ref() {
             section.setStringValue(if text.trim().is_empty() {
                 ns_string!("Recent")
@@ -1284,10 +1308,9 @@ impl ClipPanel {
     fn poll_pasteboard(&self) {
         let pb = NSPasteboard::generalPasteboard();
         let count = pb.changeCount();
-        if count == self.ivars().last_change.get() || count == self.ivars().ignore_change.get() {
+        if count == self.ivars().ignore_change.get() {
             return;
         }
-        self.ivars().last_change.set(count);
         let (source, bundle) = front_app();
         if matches!(
             bundle.as_str(),
@@ -1300,36 +1323,43 @@ impl ClipPanel {
         } else {
             Some(source)
         };
-        if let Some(text) = pb.stringForType(unsafe { NSPasteboardTypeString }) {
-            let text = text.to_string();
-            if !text.is_empty() && !text.starts_with("file://") {
-                self.ivars()
-                    .store
-                    .borrow_mut()
-                    .insert_text(&text, source.as_deref());
-            }
+        let mut capture = self.ivars().capture.borrow_mut();
+        if !capture.begin(count, source) {
+            return;
         }
-        if let Some(data) = pb
-            .dataForType(unsafe { NSPasteboardTypePNG })
-            .or_else(|| pb.dataForType(unsafe { NSPasteboardTypeTIFF }))
-        {
-            let ext = if pb.dataForType(unsafe { NSPasteboardTypePNG }).is_some() {
-                "png"
-            } else {
-                "tiff"
-            };
+        let payload = capture.read(&pb);
+        // A provider can replace the clipboard while rendering promised data.
+        if pb.changeCount() != count {
+            return;
+        }
+        let source = capture.source.clone();
+        drop(capture);
+        let mut captured = false;
+        if let Some(text) = payload.text {
             self.ivars()
                 .store
                 .borrow_mut()
-                .insert_image(&data.to_vec(), ext, source.as_deref());
+                .insert_text(&text, source.as_deref());
+            captured = true;
         }
-        if let Some(file) = pb.stringForType(unsafe { NSPasteboardTypeFileURL }) {
-            let path = file.to_string().trim_start_matches("file://").to_string();
+        if let Some((bytes, ext)) = payload.image {
+            self.ivars()
+                .store
+                .borrow_mut()
+                .insert_image(&bytes, ext, source.as_deref());
+            captured = true;
+        }
+        if let Some(file) = payload.file_url {
+            let path = file.trim_start_matches("file://").to_string();
             let path = percent_decode(&path);
             self.ivars()
                 .store
                 .borrow_mut()
                 .insert_file(std::path::Path::new(&path), source.as_deref());
+            captured = true;
+        }
+        if !captured {
+            return;
         }
         // A duplicate also changes its recency.
         {
@@ -1499,6 +1529,22 @@ pub fn run() {
     // Karabiner maps only left Cmd+U to this internal chord on DeutschADNW.
     let hotkey = HotKey::new(Some(Modifiers::META | Modifiers::SHIFT), Code::KeyW);
     manager.register(hotkey).expect("register hotkey");
+    // Resolve the command-layer character rather than assuming US punctuation.
+    let image_code = match paste::keycode_for_char('.') {
+        Some(15) => Some(Code::KeyR),   // DeutschADNW
+        Some(47) => Some(Code::Period), // US
+        _ => None,
+    };
+    if let Some(code) = image_code {
+        let images = HotKey::new(Some(Modifiers::META), code);
+        match manager.register(images) {
+            Ok(()) => {
+                panel.ivars().image_hotkey_id.set(Some(images.id()));
+                eprintln!("clip: Cmd+. opens images; press again to toggle image filtering");
+            }
+            Err(error) => eprintln!("clip: image shortcut unavailable: {error}"),
+        }
+    }
     std::mem::forget(manager);
     eprintln!(
         "clip: Cmd+Shift+U opens it. paste keycode {}",

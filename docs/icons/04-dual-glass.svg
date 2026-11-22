@@ -1,5 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024" role="img" aria-label="Dual Glass: transparent copies and a metal clip">
-<title>Dual Glass: transparent copies and a metal clip</title>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024" role="img" aria-label="Dual Glass: calmer blue lighting, brighter clear clipboard">
+<title>Dual Glass: calmer blue lighting, brighter clear clipboard</title>
 <defs>
   <linearGradient id="blue" x1="0" y1="0" x2=".7" y2="1"><stop stop-color="#78dbff"/><stop offset=".42" stop-color="#248bef"/><stop offset="1" stop-color="#1654c1"/></linearGradient>
   <linearGradient id="dark" x2="0" y2="1"><stop stop-color="#42464e"/><stop offset=".55" stop-color="#25282f"/><stop offset="1" stop-color="#14171e"/></linearGradient>
@@ -20,10 +20,17 @@
   <linearGradient id="alloy" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fff"/><stop offset=".28" stop-color="#edf0f6"/><stop offset=".55" stop-color="#ced5e2"/><stop offset=".78" stop-color="#f2f4f8"/><stop offset="1" stop-color="#a9b6cb"/></linearGradient>
   <radialGradient id="orb" cx=".28" cy=".18" r=".9"><stop stop-color="#a3efff"/><stop offset=".34" stop-color="#617fff"/><stop offset=".72" stop-color="#506CF7"/><stop offset="1" stop-color="#303fc3"/></radialGradient>
   <filter id="soft" x="-40%" y="-40%" width="180%" height="190%"><feDropShadow dx="0" dy="16" stdDeviation="14" flood-color="#13134c" flood-opacity=".20"/></filter>
+
+  <linearGradient id="quiet-blue"><stop stop-color="#607ccc"/><stop offset="1" stop-color="#607ccc"/></linearGradient>
+  <linearGradient id="pale-blue"><stop stop-color="#7189cb"/><stop offset="1" stop-color="#7189cb"/></linearGradient>
+  <radialGradient id="daylight" cx=".16" cy=".08" r="1.08"><stop stop-color="white" stop-opacity=".4"/><stop offset=".55" stop-color="white" stop-opacity=".04"/><stop offset="1" stop-color="#000" stop-opacity=".2"/></radialGradient>
+  <linearGradient id="neutral-glass" x1="0" y1="0" x2=".9" y2="1"><stop stop-color="#fff" stop-opacity=".56"/><stop offset=".37" stop-color="#fff" stop-opacity=".25"/><stop offset=".75" stop-color="#fff" stop-opacity=".20"/><stop offset="1" stop-color="#fff" stop-opacity=".43"/></linearGradient>
+  <linearGradient id="frosted-glass" x1="0" y1="0" x2=".9" y2="1"><stop stop-color="#fff" stop-opacity=".72"/><stop offset=".4" stop-color="#fff" stop-opacity=".40"/><stop offset=".8" stop-color="#fff" stop-opacity=".33"/><stop offset="1" stop-color="#fff" stop-opacity=".56"/></linearGradient>
 </defs>
-<path d="M282 64H742C896 64 960 128 960 282V742C960 896 896 960 742 960H282C128 960 64 896 64 742V282C64 128 128 64 282 64Z" fill="url(#indigo)" filter="url(#tile)"/>
+<path d="M282 64H742C896 64 960 128 960 282V742C960 896 896 960 742 960H282C128 960 64 896 64 742V282C64 128 128 64 282 64Z" fill="url(#quiet-blue)" filter="url(#tile)"/>
 <path d="M282 64H742C896 64 960 128 960 282V742C960 896 896 960 742 960H282C128 960 64 896 64 742V282C64 128 128 64 282 64Z" transform="translate(4 4) scale(.9921875)" fill="none" stroke="url(#edge)" stroke-width="3"/>
-<path d="M282 64H742C896 64 960 128 960 282V742C960 896 896 960 742 960H282C128 960 64 896 64 742V282C64 128 128 64 282 64Z" fill="url(#bloom)"/><g filter="url(#soft)"><rect x="261" y="218" width="390" height="500" rx="64" fill="url(#rear)" stroke="url(#rim)" stroke-width="3" transform="rotate(-9 456 468)"/><rect x="354" y="324" width="394" height="476" rx="64" fill="url(#clear)" stroke="url(#rim)" stroke-width="5"/>
-<rect x="364" y="334" width="374" height="456" rx="54" fill="none" stroke="white" stroke-opacity=".17" stroke-width="2"/></g><g filter="url(#soft)"><rect x="439" y="290" width="224" height="76" rx="29" fill="url(#chrome)" stroke="#eaf0fc" stroke-width="2"/>
+<path d="M282 64H742C896 64 960 128 960 282V742C960 896 896 960 742 960H282C128 960 64 896 64 742V282C64 128 128 64 282 64Z" fill="url(#daylight)"/><g filter="url(#soft)"><rect x="261" y="218" width="390" height="500" rx="64" fill="white" fill-opacity=".07" stroke="white" stroke-opacity=".38" stroke-width="3" transform="rotate(-9 456 468)"/><rect x="354" y="324" width="394" height="476" rx="64" fill="url(#neutral-glass)" stroke="url(#rim)" stroke-width="6"/>
+<rect x="365" y="335" width="372" height="454" rx="53" fill="none" stroke="white" stroke-opacity=".30" stroke-width="2"/>
+<path d="M374 474V393Q374 344 423 344H496" fill="none" stroke="white" stroke-opacity=".7" stroke-width="3" stroke-linecap="round"/></g><g filter="url(#soft)"><rect x="439" y="290" width="224" height="76" rx="29" fill="url(#chrome)" stroke="#eaf0fc" stroke-width="2"/>
 <rect x="448" y="299" width="206" height="58" rx="20" fill="none" stroke="#fff" stroke-opacity=".36" stroke-width="2"/>
 <path d="M492 329H610" stroke="#68758a" stroke-opacity=".55" stroke-width="8" stroke-linecap="round"/></g></svg>

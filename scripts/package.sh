@@ -27,6 +27,11 @@ with open(sys.argv[1], "wb") as out:
         "NSHighResolutionCapable": True,
     }, out)
 PY
-codesign --force --sign - "$app"
+# A Developer ID gives local updates a stable designated requirement, so
+# Accessibility grants survive rebuilds. Ad-hoc signatures are build-specific.
+# Override explicitly (including '-' for ad-hoc) when choosing another identity.
+identity=${CLIP_SIGN_IDENTITY:-$(security find-identity -v -p codesigning 2>/dev/null | awk '/Developer ID Application:/ {print $2; exit}')}
+identity=${identity:--}
+codesign --force --sign "$identity" "$app"
 codesign --verify --strict "$app"
 echo "$app"

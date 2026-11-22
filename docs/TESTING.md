@@ -35,6 +35,15 @@ muted. No private clipboard database was moved into the VM.
 - Closing a `blabla` search with the global hotkey and reopening showed an empty
   search and recent clips. Escape dismissal reset the search too. Right/Left
   preview navigation retained the query instead of clearing it.
+- Chrome's native Copy Image command on a generated JPEG saved an image before
+  any paste. Cmd+. opened Images and a second Cmd+. returned to All Types.
+- The VM-only `clipboard-qa` example uses a unique native pasteboard: advertised
+  PNG data was fulfilled after eight empty reads without changing changeCount,
+  and captured without a paste. A JPEG-only clipboard normalized to a decodable
+  TIFF. Retry state is bounded and partial text is not captured repeatedly.
+- A database regression test puts an image file behind 220 text entries and
+  checks that Images finds it both with and without a query. This covers type
+  filtering before the result limit rather than filtering only a cached page.
 
 The `image-zoom-qa`, `paste-receiver-qa`, and `thumbnail-qa` examples are for VM-only
 checks. They require `CLIP_VM_TEST=1`. The fixture seeder refuses to seed the
