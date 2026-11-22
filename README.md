@@ -1,4 +1,6 @@
-# Clipglass
+<p align="center"><img src="assets/Clipglass.png" width="112" height="112" alt="Clipglass app icon"></p>
+
+<h1 align="center">Clipglass</h1>
 
 A keyboard-first clipboard history for macOS, built in Rust with native AppKit views. No webview, account, or cloud service.
 

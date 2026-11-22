@@ -7,7 +7,9 @@ if [ -e "$app" ]; then
     echo "Refusing to replace existing bundle: $app" >&2
     exit 1
 fi
-mkdir -p "$app/Contents/MacOS"
+mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
+root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+cp "$root/assets/Clipglass.icns" "$app/Contents/Resources/Clipglass.icns"
 cp "$binary" "$app/Contents/MacOS/clip"
 chmod 755 "$app/Contents/MacOS/clip"
 python3 - "$app/Contents/Info.plist" <<'PY'
@@ -19,6 +21,7 @@ with open(sys.argv[1], "wb") as out:
         "CFBundleIdentifier": "com.moritz.clip",
         "CFBundleName": "Clipglass",
         "CFBundleDisplayName": "Clipglass",
+        "CFBundleIconFile": "Clipglass",
         "CFBundlePackageType": "APPL",
         "CFBundleShortVersionString": "0.1.0",
         "CFBundleVersion": "1",
