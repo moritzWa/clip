@@ -84,6 +84,47 @@ pub fn keycode_for_char(want: char) -> Option<u16> {
     }
 }
 
+/// Current command-layer label for shortcut recorders (including ADNW).
+pub fn key_character(code: u16) -> Option<String> {
+    unsafe {
+        let source = TISCopyCurrentKeyboardInputSource();
+        if source.is_null() {
+            return None;
+        }
+        let data = TISGetInputSourceProperty(source, kTISPropertyUnicodeKeyLayoutData);
+        if data.is_null() {
+            CFRelease(source);
+            return None;
+        }
+        let layout = CFDataGetBytePtr(data);
+        if layout.is_null() {
+            CFRelease(source);
+            return None;
+        }
+        let mut dead = 0;
+        let mut len = 0;
+        let mut chars = [0u16; 4];
+        let rc = UCKeyTranslate(
+            layout,
+            code,
+            kUCKeyActionDisplay,
+            1,
+            LMGetKbdType() as u32,
+            kUCKeyTranslateNoDeadKeysBit,
+            &mut dead,
+            chars.len(),
+            &mut len,
+            chars.as_mut_ptr(),
+        );
+        CFRelease(source);
+        if rc == 0 && len > 0 {
+            Some(String::from_utf16_lossy(&chars[..len]))
+        } else {
+            None
+        }
+    }
+}
+
 #[link(name = "Carbon", kind = "framework")]
 unsafe extern "C" {
     static kTISPropertyUnicodeKeyLayoutData: *const c_void;

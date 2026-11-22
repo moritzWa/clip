@@ -4,6 +4,8 @@ mod image_zoom;
 mod ocr;
 mod paste;
 mod selection;
+mod settings;
+mod shortcuts;
 mod store;
 mod thumbnails;
 mod ui;

@@ -1,10 +1,10 @@
 use std::cell::{Cell, RefCell};
 use std::collections::{HashSet, VecDeque};
+use std::rc::Rc;
 use std::time::{Duration, Instant};
 
 use block2::RcBlock;
-use global_hotkey::hotkey::{Code, HotKey, Modifiers};
-use global_hotkey::{GlobalHotKeyEvent, GlobalHotKeyManager, HotKeyState};
+use global_hotkey::{GlobalHotKeyEvent, HotKeyState};
 use objc2::rc::Retained;
 use objc2::runtime::{AnyObject, NSObjectProtocol, ProtocolObject};
 use objc2::{AnyThread, DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send};
@@ -28,6 +28,9 @@ use crate::paste;
 use crate::store::{self, Hit, Store};
 
 struct Ivars {
+    shortcuts: Rc<RefCell<crate::shortcuts::Service>>,
+    settings: RefCell<Option<Retained<crate::settings::SettingsWindow>>>,
+    status_item: RefCell<Option<Retained<objc2_app_kit::NSStatusItem>>>,
     store: RefCell<Store>,
     rows: RefCell<Vec<Hit>>,
     recent: RefCell<Vec<Hit>>,
@@ -69,7 +72,6 @@ struct Ivars {
     list_scroll: RefCell<Option<Retained<NSScrollView>>>,
     text_scroll: RefCell<Option<Retained<NSScrollView>>>,
     capture: RefCell<crate::clipboard::Capture>,
-    image_hotkey_id: Cell<Option<u32>>,
     ignore_change: Cell<isize>,
     prev_pid: Cell<i32>,
     previewing: Cell<bool>,
@@ -146,6 +148,20 @@ define_class!(
     }
 
     impl ClipPanel {
+        #[unsafe(method(showSettings:))]
+        fn settings_action(&self, _: &AnyObject) { self.show_settings(); }
+
+        #[unsafe(method(showHistory:))]
+        fn history_action(&self, _: &AnyObject) {
+            self.set_filter(0);
+            if !self.isVisible() { self.show_panel(); }
+        }
+
+        #[unsafe(method(showImages:))]
+        fn images_action(&self, _: &AnyObject) {
+            self.set_filter(3);
+            if !self.isVisible() { self.show_panel(); }
+        }
         #[unsafe(method(canBecomeKeyWindow))]
         fn can_become_key(&self) -> bool { true }
 
@@ -197,12 +213,19 @@ impl ClipPanel {
         MainThreadMarker::new().expect("main thread")
     }
 
-    fn new(mtm: MainThreadMarker, store: Store) -> Retained<Self> {
+    fn new(
+        mtm: MainThreadMarker,
+        store: Store,
+        shortcuts: Rc<RefCell<crate::shortcuts::Service>>,
+    ) -> Retained<Self> {
         let recent = store.recent(200);
         let rows = recent.clone();
         let frame = rect(0.0, 0.0, design::WIDTH, design::HEIGHT);
         let style = NSWindowStyleMask::Borderless;
         let this = mtm.alloc().set_ivars(Ivars {
+            shortcuts,
+            settings: RefCell::new(None),
+            status_item: RefCell::new(None),
             store: RefCell::new(store),
             rows: RefCell::new(rows),
             recent: RefCell::new(recent),
@@ -238,7 +261,6 @@ impl ClipPanel {
             list_scroll: RefCell::new(None),
             text_scroll: RefCell::new(None),
             capture: RefCell::new(crate::clipboard::Capture::new(0)),
-            image_hotkey_id: Cell::new(None),
             ignore_change: Cell::new(-1),
             prev_pid: Cell::new(0),
             previewing: Cell::new(false),
@@ -663,7 +685,13 @@ impl ClipPanel {
     fn show_panel(&self) {
         self.cancel_paste();
         self.ivars().previewing.set(false);
-        if let Some(app) = NSWorkspace::sharedWorkspace().frontmostApplication() {
+        if let Some(app) = NSWorkspace::sharedWorkspace()
+            .frontmostApplication()
+            .filter(|app| {
+                app.processIdentifier()
+                    != NSRunningApplication::currentApplication().processIdentifier()
+            })
+        {
             self.ivars().prev_pid.set(app.processIdentifier());
             if let Some(button) = self.ivars().paste_button.borrow().as_ref() {
                 let name = app
@@ -731,8 +759,19 @@ impl ClipPanel {
 
     fn poll_hotkey(&self) {
         while let Ok(event) = GlobalHotKeyEvent::receiver().try_recv() {
+            let (history, images, active) = {
+                let shortcuts = self.ivars().shortcuts.borrow();
+                (
+                    shortcuts.history_id(),
+                    shortcuts.images_id(),
+                    shortcuts.accepts(event.id),
+                )
+            };
+            if !active {
+                continue;
+            }
             if event.state == HotKeyState::Pressed {
-                if Some(event.id) == self.ivars().image_hotkey_id.get() {
+                if event.id == images {
                     let index = if self.isVisible() && self.ivars().filter_index.get() == 3 {
                         0
                     } else {
@@ -744,6 +783,9 @@ impl ClipPanel {
                     } else if self.ivars().previewing.get() {
                         self.focus_search();
                     }
+                    continue;
+                }
+                if event.id != history {
                     continue;
                 }
                 if self.isVisible() {
@@ -762,6 +804,30 @@ impl ClipPanel {
             filter.selectItemAtIndex(index);
         }
         self.refresh_results();
+    }
+
+    fn show_settings(&self) {
+        if let Some(app) = NSWorkspace::sharedWorkspace()
+            .frontmostApplication()
+            .filter(|app| {
+                app.processIdentifier()
+                    != NSRunningApplication::currentApplication().processIdentifier()
+            })
+        {
+            self.ivars().prev_pid.set(app.processIdentifier());
+        }
+        self.cancel_paste();
+        if self.isVisible() {
+            self.hide_panel();
+        }
+        let existing = self.ivars().settings.borrow().clone();
+        let settings = existing.unwrap_or_else(|| {
+            let window =
+                crate::settings::SettingsWindow::new(self.mtm(), self.ivars().shortcuts.clone());
+            *self.ivars().settings.borrow_mut() = Some(window.clone());
+            window
+        });
+        settings.show();
     }
 
     fn poll_query(&self) {
@@ -1487,9 +1553,16 @@ pub fn run() {
     let main_menu = objc2_app_kit::NSMenu::new(mtm);
     let app_item = objc2_app_kit::NSMenuItem::new(mtm);
     let app_menu = objc2_app_kit::NSMenu::new(mtm);
+    let settings_item = unsafe {
+        app_menu.addItemWithTitle_action_keyEquivalent(
+            ns_string!("Settings…"),
+            Some(objc2::sel!(showSettings:)),
+            ns_string!(","),
+        )
+    };
     unsafe {
         app_menu.addItemWithTitle_action_keyEquivalent(
-            ns_string!("Quit Clip"),
+            ns_string!("Quit Clipglass"),
             Some(objc2::sel!(terminate:)),
             ns_string!("q"),
         );
@@ -1519,35 +1592,75 @@ pub fn run() {
     main_menu.addItem(&edit_item);
     app.setMainMenu(Some(&main_menu));
 
+    let data_dir = store::data_dir();
+    let existing_install = data_dir.join("history.db").exists();
+    let initial = if existing_install {
+        crate::shortcuts::Config::legacy(paste::keycode_for_char('.').unwrap_or(47))
+    } else {
+        crate::shortcuts::Config::defaults(paste::keycode_for_char('v').unwrap_or(9))
+    };
+    let shortcuts = Rc::new(RefCell::new(
+        crate::shortcuts::Service::open(data_dir.join("shortcuts.conf"), initial).unwrap_or_else(
+            |error| {
+                eprintln!("clip: shortcut initialization failed: {error}");
+                std::process::exit(1);
+            },
+        ),
+    ));
     let store = Store::open().unwrap_or_else(|e| {
         eprintln!("clip: {e}");
         std::process::exit(1);
     });
-    let panel = ClipPanel::new(mtm, store);
-
-    let manager = GlobalHotKeyManager::new().expect("hotkey");
-    // Karabiner maps only left Cmd+U to this internal chord on DeutschADNW.
-    let hotkey = HotKey::new(Some(Modifiers::META | Modifiers::SHIFT), Code::KeyW);
-    manager.register(hotkey).expect("register hotkey");
-    // Resolve the command-layer character rather than assuming US punctuation.
-    let image_code = match paste::keycode_for_char('.') {
-        Some(15) => Some(Code::KeyR),   // DeutschADNW
-        Some(47) => Some(Code::Period), // US
-        _ => None,
-    };
-    if let Some(code) = image_code {
-        let images = HotKey::new(Some(Modifiers::META), code);
-        match manager.register(images) {
-            Ok(()) => {
-                panel.ivars().image_hotkey_id.set(Some(images.id()));
-                eprintln!("clip: Cmd+. opens images; press again to toggle image filtering");
-            }
-            Err(error) => eprintln!("clip: image shortcut unavailable: {error}"),
+    let panel = ClipPanel::new(mtm, store, shortcuts.clone());
+    unsafe {
+        settings_item.setTarget(Some(&panel));
+    }
+    // Keep Settings discoverable even when a global shortcut is unavailable.
+    let status = objc2_app_kit::NSStatusBar::systemStatusBar()
+        .statusItemWithLength(objc2_app_kit::NSVariableStatusItemLength);
+    if let Some(button) = status.button(mtm) {
+        if let Some(image) = NSImage::imageWithSystemSymbolName_accessibilityDescription(
+            ns_string!("doc.on.clipboard"),
+            Some(ns_string!("Clipglass")),
+        ) {
+            image.setTemplate(true);
+            button.setImage(Some(&image));
+        } else {
+            button.setTitle(ns_string!("Clipglass"));
+        }
+        button.setToolTip(Some(ns_string!("Clipglass")));
+    }
+    let status_menu = objc2_app_kit::NSMenu::new(mtm);
+    for (title, selector, key) in [
+        ("Open Clipboard History", objc2::sel!(showHistory:), ""),
+        ("Open Images", objc2::sel!(showImages:), ""),
+        ("Settings…", objc2::sel!(showSettings:), ","),
+    ] {
+        let item = unsafe {
+            status_menu.addItemWithTitle_action_keyEquivalent(
+                &NSString::from_str(title),
+                Some(selector),
+                &NSString::from_str(key),
+            )
+        };
+        unsafe {
+            item.setTarget(Some(&panel));
         }
     }
-    std::mem::forget(manager);
+    unsafe {
+        status_menu.addItemWithTitle_action_keyEquivalent(
+            ns_string!("Quit Clipglass"),
+            Some(objc2::sel!(terminate:)),
+            ns_string!("q"),
+        );
+    }
+    status.setMenu(Some(&status_menu));
+    *panel.ivars().status_item.borrow_mut() = Some(status);
+    if let Some(error) = shortcuts.borrow().issue.as_ref() {
+        eprintln!("clip: {error}");
+    }
     eprintln!(
-        "clip: Cmd+Shift+U opens it. paste keycode {}",
+        "clip: shortcuts loaded; paste keycode {}",
         paste::paste_keycode()
     );
     eprintln!(
@@ -1558,6 +1671,17 @@ pub fn run() {
     let panel_for_keys = panel.clone();
     let block = RcBlock::new(move |event: std::ptr::NonNull<NSEvent>| -> *mut NSEvent {
         let event_ref = unsafe { event.as_ref() };
+        let settings = panel_for_keys.ivars().settings.borrow().clone();
+        if settings
+            .as_ref()
+            .is_some_and(|window| window.handle_key(event_ref))
+        {
+            return std::ptr::null_mut();
+        }
+        if crate::settings::is_settings_key(event_ref) {
+            panel_for_keys.show_settings();
+            return std::ptr::null_mut();
+        }
         if panel_for_keys.handle_key(event_ref) {
             std::ptr::null_mut()
         } else {

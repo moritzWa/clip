@@ -44,12 +44,16 @@ The visible app name is Clipglass. The bundle ID, `com.moritz.clip`, and storage
 
 ## Open history
 
-The current internal shortcut is **Command+Shift+physical W**. That is **⌘⇧W on US** and **⌘⇧U on DeutschADNW**. Disable any conflicting binding in another app. There is no shortcut settings screen yet.
+Fresh installations use **⌘⇧V** for history and **⌃⌘V** for images. The image
+shortcut toggles Images/All Types inside the panel. Existing installations retain
+their old internal Command+Shift+physical W and Cmd+period bindings on migration.
 
-**⌘.** opens image-only history. Inside the panel it toggles Images/All Types.
-It resolves to physical R on DeutschADNW and physical Period on US. The normal
-history hotkey opens All Types. This overrides the conventional Cmd+. Cancel
-action while Clipglass is running. No Karabiner change is needed for this shortcut.
+Use the clipboard icon in the menu bar → **Settings…**, or **⌘,** while Clipglass
+is focused, to record your own shortcuts. Changes take effect without restarting.
+Escape cancels recording; **Restore Defaults** applies the fresh-install defaults.
+Shortcuts are saved in `~/Library/Application Support/Clip/shortcuts.conf`.
+Keyboard remappers still run first, so the recorder displays the combination
+received by Clipglass rather than the physical chord before remapping.
 
 ## Allow automatic paste
 

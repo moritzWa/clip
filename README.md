@@ -42,13 +42,21 @@ Read the [installation and troubleshooting guide](docs/INSTALL.md) for prerequis
 
 ## Keyboard controls
 
-The development hotkey is currently tied to physical W: **⌘⇧W on a US keyboard**, or **⌘⇧U on DeutschADNW**. It is not configurable yet. Check for conflicts with other apps.
+Fresh installations use **⌘⇧V** for clipboard history and **⌃⌘V** for images.
+The image shortcut toggles Images/All Types while the panel is open, keeping your
+query. The normal history shortcut reopens All Types. Global shortcuts can
+replace app-specific actions, such as plain-text paste, so choose combinations
+that suit your workflow.
 
-**⌘. opens image-only history from any app.** While Clipglass is open, the same
-shortcut toggles between Images and All Types without clearing your query.
-The normal history hotkey reopens All Types. On DeutschADNW, period is physical R;
-on US it is physical Period. Registration failures are reported in the log.
-This global shortcut replaces the conventional Cancel action in apps that use ⌘.
+Open **Settings…** from the menu-bar clipboard icon, or press **⌘,** while
+Clipglass is focused. Click a shortcut and press a new combination with Command
+or Control. Changes apply immediately and persist across restarts. Escape
+cancels recording. Duplicate or unavailable shortcuts are rejected without
+replacing the previous bindings. **Restore Defaults** applies the defaults above.
+
+Existing installations keep their previous shortcuts: the internal
+Command+Shift+physical W chord and Cmd+period. Keyboard-layout remappers still
+apply. Settings shows the combination that actually reaches the app.
 
 | Key | Action |
 | --- | --- |
@@ -59,6 +67,7 @@ This global shortcut replaces the conventional Cancel action in apps that use �
 | ← | Return to search |
 | Enter | Paste the current clip, or all marked clips |
 | Escape | Leave the preview, clear marks, or hide the panel |
+| ⌘, | Open Settings while Clipglass is focused |
 
 X still types normally in the search field. Press Left or click the search field to edit a query; Up/Down returns to list browsing.
 
@@ -83,7 +92,7 @@ The app has no application network client, account, sync, or analytics service. 
   image files as well as copied image payloads.
 - Capture, search, and large-file writes can still block the main thread. OCR and thumbnail decoding run off the main thread.
 - Mixed/media batches use a 250 ms gap. The destination must accept each type and process pastes within that interval.
-- Shortcut configuration, an in-app permissions screen, notarization, and
+- An in-app permissions screen, notarization, and
   published binary downloads are not implemented. Local packaging uses an
   available Developer ID certificate, with an ad-hoc fallback.
 

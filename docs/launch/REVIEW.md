@@ -24,7 +24,7 @@ Zugangsdaten gehören nicht in das Launch-Paket.
 - Festlegen, ob zunächst nur der Quellcode veröffentlicht wird. Es wurde kein
   Release-Build, GitHub Release, signierter Download oder Homebrew-Paket erstellt.
 - Die Entwicklungsgrenzen im README beibehalten. Besonders wichtig sind das
-  feste physische Tastenkürzel, unverschlüsselte History und unvollständige
+  mögliche globale Shortcut-Konflikte, unverschlüsselte History und unvollständige
   Passwortmanager-Ausnahmen.
 - Nach Freigabe die Lizenz an die endgültige Stelle übernehmen, Links anpassen
   und einen letzten Audit des freizugebenden Standes durchführen.

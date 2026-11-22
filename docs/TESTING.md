@@ -44,6 +44,14 @@ muted. No private clipboard database was moved into the VM.
 - A database regression test puts an image file behind 220 text entries and
   checks that Images finds it both with and without a query. This covers type
   filtering before the result limit rather than filtering only a cached page.
+- Cmd+, opened the native Settings window from the focused history panel.
+  A recorded Cmd+Shift+K binding took effect immediately and appeared after a
+  process restart. Duplicate history/image bindings were rejected without a
+  settings-file change. Escape and closing the window cancelled recording and
+  restored active shortcuts. Restore Defaults wrote Cmd+Shift+V / Ctrl+Cmd+V;
+  both opened the expected history/image views. The menu-bar icon also opened
+  Settings. Migration retained the earlier Cmd+Shift+physical W and Cmd+period
+  bindings before any explicit change.
 
 The `image-zoom-qa`, `paste-receiver-qa`, and `thumbnail-qa` examples are for VM-only
 checks. They require `CLIP_VM_TEST=1`. The fixture seeder refuses to seed the
