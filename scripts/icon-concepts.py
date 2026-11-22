@@ -113,8 +113,23 @@ def pane(material):
 <rect x="365" y="335" width="372" height="454" rx="53" fill="none" stroke="white" stroke-opacity=".30" stroke-width="2"/>
 <path d="M374 474V393Q374 344 423 344H496" fill="none" stroke="white" stroke-opacity=".7" stroke-width="3" stroke-linecap="round"/>'''
 
-icon("04-dual-glass", "Dual Glass: calmer blue lighting, brighter clear clipboard", "quiet-blue",
-     lighting + '<g filter="url(#soft)">' + quiet_rear + pane("neutral-glass") + '</g>' + clip)
+defs = defs.replace("</defs>", '''
+  <linearGradient id="true-blue"><stop stop-color="#397ddd"/><stop offset="1" stop-color="#397ddd"/></linearGradient>
+  <linearGradient id="bright-glass" x1="0" y1="0" x2=".85" y2="1"><stop stop-color="white" stop-opacity=".78"/><stop offset=".38" stop-color="white" stop-opacity=".43"/><stop offset=".72" stop-color="white" stop-opacity=".36"/><stop offset="1" stop-color="white" stop-opacity=".64"/></linearGradient>
+</defs>''')
+large_copy = '''<g filter="url(#soft)">
+<rect x="192" y="150" width="520" height="620" rx="76" fill="white" fill-opacity=".13" stroke="white" stroke-opacity=".58" stroke-width="5"/>
+<rect x="312" y="250" width="520" height="620" rx="76" fill="url(#bright-glass)" stroke="url(#rim)" stroke-width="7"/>
+<rect x="324" y="262" width="496" height="596" rx="64" fill="none" stroke="white" stroke-opacity=".36" stroke-width="2"/>
+<path d="M335 416V332Q335 273 394 273H501" fill="none" stroke="white" stroke-opacity=".8" stroke-width="4" stroke-linecap="round"/>
+</g>
+<g filter="url(#soft)">
+<rect x="444" y="204" width="256" height="94" rx="34" fill="url(#chrome)" stroke="#f2f6ff" stroke-width="3"/>
+<rect x="454" y="214" width="236" height="74" rx="24" fill="none" stroke="white" stroke-opacity=".40" stroke-width="2"/>
+<path d="M506 252H638" stroke="#68758a" stroke-opacity=".55" stroke-width="9" stroke-linecap="round"/>
+</g>'''
+icon("04-dual-glass", "Dual Glass: larger brighter clipboard, straight rear copy, blue background", "true-blue",
+     lighting + large_copy)
 icon("10-frosted-blue", "Frosted Blue: a brighter glass clipboard with stronger contrast", "quiet-blue",
      lighting + '<g filter="url(#soft)">' + quiet_rear + pane("frosted-glass") + '</g>' + clip)
 icon("11-soft-blue", "Soft Blue: quieter blue pigment and frosted glass", "pale-blue",
