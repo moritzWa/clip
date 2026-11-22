@@ -17,8 +17,8 @@ with open(sys.argv[1], "wb") as out:
     plistlib.dump({
         "CFBundleExecutable": "clip",
         "CFBundleIdentifier": "com.moritz.clip",
-        "CFBundleName": "Clip",
-        "CFBundleDisplayName": "Clip",
+        "CFBundleName": "Clipglass",
+        "CFBundleDisplayName": "Clipglass",
         "CFBundlePackageType": "APPL",
         "CFBundleShortVersionString": "0.1.0",
         "CFBundleVersion": "1",

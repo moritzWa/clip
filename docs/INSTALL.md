@@ -32,13 +32,14 @@ sh scripts/install.sh "$PWD/target/debug/clip"
 
 The installer:
 
-- Packages the binary as `~/Applications/Clip.app` with an ad-hoc signature.
-- Preserves an existing bundle as a timestamped `Clip-backup-*.app`.
+- Packages the binary as `/Applications/Clipglass.app` with an ad-hoc signature.
+- Requires write access to `/Applications`.
+- Preserves replaced bundles and the older `~/Applications/Clip.app` as timestamped backups in `~/Applications`.
 - Writes `~/Library/LaunchAgents/com.moritz.clip.plist`.
 - Starts the app hidden, enables startup at login, and lets launchd restart it after an exit.
 - Does not change keyboard mappings or grant Accessibility permission.
 
-The existing app name and bundle ID, `com.moritz.clip`, remain unchanged for now. Installing does not delete clipboard history.
+The visible app name is Clipglass. The bundle ID, `com.moritz.clip`, and storage directory remain unchanged. Installing does not delete clipboard history.
 
 ## Open history
 
@@ -47,8 +48,8 @@ The current internal shortcut is **Command+Shift+physical W**. That is **⌘⇧W
 ## Allow automatic paste
 
 1. Open **System Settings → Privacy & Security → Accessibility**.
-2. Add `~/Applications/Clip.app` if it is not listed.
-3. Enable **Clip**.
+2. Add `/Applications/Clipglass.app` if it is not listed.
+3. Enable **Clipglass**.
 4. Restart the service if the running app has not picked up the grant:
 
 ```sh
@@ -91,6 +92,6 @@ The launch-agent file remains after stopping, so the app can start again at the 
 
 ## Remove the app without deleting history
 
-Stop the service first. Remove `~/Library/LaunchAgents/com.moritz.clip.plist`, then move `~/Applications/Clip.app` to the Trash. Remove **Clip** from Accessibility if you no longer use it.
+Stop the service first. Remove `~/Library/LaunchAgents/com.moritz.clip.plist`, then move `/Applications/Clipglass.app` to the Trash. Remove **Clipglass** from Accessibility if you no longer use it.
 
 History stays in `~/Library/Application Support/Clip/`. Back up that folder before any separate decision to delete history. This guide does not delete it.

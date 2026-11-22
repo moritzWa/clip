@@ -32,9 +32,9 @@ sh scripts/install.sh "$PWD/target/debug/clip"
 
 The repository is private during launch preparation, so cloning currently requires access.
 
-The installer creates `~/Applications/Clip.app` and a per-user launch agent. The app starts hidden, starts at login, and restarts after an exit. The existing `Clip` app, storage, and bundle names are retained for compatibility.
+The installer creates `/Applications/Clipglass.app` and a per-user launch agent. It requires write access to `/Applications`. The app starts hidden, starts at login, and restarts after an exit. Storage and bundle identifiers retain `Clip` for compatibility; an older `~/Applications/Clip.app` is preserved as a backup.
 
-Enable **Clip** in **System Settings → Privacy & Security → Accessibility** for automatic paste. Without that permission, Enter still copies the selected text or first media payload to the clipboard.
+Enable **Clipglass** in **System Settings → Privacy & Security → Accessibility** for automatic paste. Without that permission, Enter still copies the selected text or first media payload to the clipboard.
 
 Read the [installation and troubleshooting guide](docs/INSTALL.md) for prerequisites, stopping the service, and removing it without deleting history.
 

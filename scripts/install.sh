@@ -4,11 +4,15 @@
 set -eu
 binary=${1:?usage: install.sh BINARY}
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-app="$HOME/Applications/Clip.app"
-staging="$HOME/Applications/Clip-staging-$$.app"
+app="/Applications/Clipglass.app"
+staging="/Applications/Clipglass-staging-$$.app"
 label=com.moritz.clip
 domain="gui/$(id -u)"
 plist="$HOME/Library/LaunchAgents/$label.plist"
+if [ ! -w /Applications ]; then
+    echo "Write access to /Applications is required to install Clipglass." >&2
+    exit 1
+fi
 mkdir -p "$HOME/Applications" "$HOME/Library/LaunchAgents" "$HOME/Library/Logs/Clip"
 umask 077
 touch "$HOME/Library/Logs/Clip/stdout.log" "$HOME/Library/Logs/Clip/stderr.log"
@@ -18,9 +22,12 @@ if launchctl print "$domain/$label" >/dev/null 2>&1; then
     launchctl bootout "$domain/$label"
 fi
 if [ -e "$app" ]; then
-    mv "$app" "$HOME/Applications/Clip-backup-$(date +%Y%m%d-%H%M%S).app"
+    mv "$app" "$HOME/Applications/Clipglass-backup-$(date +%Y%m%d-%H%M%S)-$$.app"
 fi
 mv "$staging" "$app"
+if [ -e "$HOME/Applications/Clip.app" ]; then
+    mv "$HOME/Applications/Clip.app" "$HOME/Applications/Clip-backup-$(date +%Y%m%d-%H%M%S)-$$.app"
+fi
 python3 - "$plist" "$app/Contents/MacOS/clip" "$HOME/Library/Logs/Clip" <<'PY'
 import plistlib
 import sys
