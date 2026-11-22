@@ -55,4 +55,45 @@ icon("03-silver", "Silver: a sculpted metal clipboard on graphite", "dark", '''
   <path d="M389 440H635M389 531H635M389 622H553" fill="none" stroke="#798a9d" stroke-opacity=".67" stroke-width="22" stroke-linecap="round"/>
   <circle cx="641" cy="719" r="18" fill="url(#blue)"/>
 </g>''')
+# Second round: genuinely translucent objects, no document lines, a stronger
+# indigo/violet field and larger signature dots. The first round stays intact.
+defs = defs.replace("</defs>", '''
+  <linearGradient id="indigo" x1=".12" y1="0" x2=".88" y2="1"><stop stop-color="#a0c0ff"/><stop offset=".32" stop-color="#506CF7"/><stop offset=".7" stop-color="#6744e9"/><stop offset="1" stop-color="#25258b"/></linearGradient>
+  <radialGradient id="bloom" cx=".18" cy=".12" r=".9"><stop stop-color="#c1f4ff" stop-opacity=".28"/><stop offset=".6" stop-color="#92b8ff" stop-opacity="0"/><stop offset="1" stop-color="#5036ce" stop-opacity="0"/></radialGradient>
+  <linearGradient id="clear" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fff" stop-opacity=".30"/><stop offset=".32" stop-color="#e4efff" stop-opacity=".09"/><stop offset=".67" stop-color="#e0e9ff" stop-opacity=".16"/><stop offset="1" stop-color="#fff" stop-opacity=".33"/></linearGradient>
+  <linearGradient id="rear" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#d2faff" stop-opacity=".24"/><stop offset=".7" stop-color="#dddbff" stop-opacity=".06"/><stop offset="1" stop-color="#fff" stop-opacity=".19"/></linearGradient>
+  <linearGradient id="rim" x1="0" y1="0" x2=".8" y2="1"><stop stop-color="white" stop-opacity=".96"/><stop offset=".35" stop-color="#e8f4ff" stop-opacity=".34"/><stop offset=".62" stop-color="#c8d6ff" stop-opacity=".13"/><stop offset="1" stop-color="white" stop-opacity=".73"/></linearGradient>
+  <linearGradient id="chrome" x2="0" y2="1"><stop stop-color="#fff"/><stop offset=".16" stop-color="#e9edf5"/><stop offset=".42" stop-color="#b7c0d1"/><stop offset=".49" stop-color="#7f8b9f"/><stop offset=".53" stop-color="#dfe7f3"/><stop offset=".78" stop-color="#f5f8fc"/><stop offset="1" stop-color="#9aa7bb"/></linearGradient>
+  <linearGradient id="alloy" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fff"/><stop offset=".28" stop-color="#edf0f6"/><stop offset=".55" stop-color="#ced5e2"/><stop offset=".78" stop-color="#f2f4f8"/><stop offset="1" stop-color="#a9b6cb"/></linearGradient>
+  <radialGradient id="orb" cx=".28" cy=".18" r=".9"><stop stop-color="#a3efff"/><stop offset=".34" stop-color="#617fff"/><stop offset=".72" stop-color="#506CF7"/><stop offset="1" stop-color="#303fc3"/></radialGradient>
+  <filter id="soft" x="-40%" y="-40%" width="180%" height="190%"><feDropShadow dx="0" dy="16" stdDeviation="14" flood-color="#13134c" flood-opacity=".20"/></filter>
+</defs>''')
+
+bloom = f'<path d="{shape}" fill="url(#bloom)"/>'
+rear = '''<rect x="261" y="218" width="390" height="500" rx="64" fill="url(#rear)" stroke="url(#rim)" stroke-width="3" transform="rotate(-9 456 468)"/>'''
+front = '''<rect x="354" y="324" width="394" height="476" rx="64" fill="url(#clear)" stroke="url(#rim)" stroke-width="5"/>
+<rect x="364" y="334" width="374" height="456" rx="54" fill="none" stroke="white" stroke-opacity=".17" stroke-width="2"/>'''
+clip = '''<g filter="url(#soft)"><rect x="439" y="290" width="224" height="76" rx="29" fill="url(#chrome)" stroke="#eaf0fc" stroke-width="2"/>
+<rect x="448" y="299" width="206" height="58" rx="20" fill="none" stroke="#fff" stroke-opacity=".36" stroke-width="2"/>
+<path d="M492 329H610" stroke="#68758a" stroke-opacity=".55" stroke-width="8" stroke-linecap="round"/></g>'''
+dot = '''<circle cx="650" cy="699" r="51" fill="url(#orb)" stroke="#a6b8ff" stroke-opacity=".58" stroke-width="2"/>'''
+
+icon("04-dual-glass", "Dual Glass: transparent copies and a metal clip", "indigo",
+     bloom + '<g filter="url(#soft)">' + rear + front + '</g>' + clip)
+icon("05-glass-dot", "Glass Dot: layered transparent glass and an indigo orb", "indigo",
+     bloom + '<g filter="url(#soft)">' + rear + front + '</g>' + clip + dot)
+icon("06-pure-copy", "Pure Copy: two clear sheets and one blue dot", "indigo",
+     bloom + '<g filter="url(#soft)">' + rear + front + '</g>' + dot)
+
+silver_front = '''<g filter="url(#object)"><rect x="354" y="324" width="394" height="476" rx="64" fill="url(#alloy)" stroke="url(#rim)" stroke-width="4"/>
+<rect x="365" y="335" width="372" height="454" rx="53" fill="none" stroke="#fff" stroke-opacity=".4" stroke-width="2"/></g>'''
+icon("07-silver-dot", "Silver Dot: abstract metal clipboard with a larger indigo accent", "dark",
+     rear + silver_front + clip + dot)
+icon("08-indigo-alloy", "Indigo Alloy: sculpted silver over a violet blue gradient", "indigo",
+     bloom + rear + silver_front + clip + dot)
+icon("09-orbit", "Orbit: a silver plate with an oversized blue glass lens", "dark",
+     rear + silver_front + '''<rect x="455" y="294" width="192" height="53" rx="26.5" fill="url(#chrome)" stroke="#eef4ff" stroke-width="2"/>
+<g filter="url(#soft)"><circle cx="652" cy="694" r="79" fill="url(#chrome)"/>
+<circle cx="652" cy="694" r="73" fill="url(#orb)" stroke="#bccdff" stroke-width="2"/>
+<path d="M605 667C616 635 645 625 668 634" fill="none" stroke="#e9f8ff" stroke-opacity=".65" stroke-width="5" stroke-linecap="round"/></g>''')
 print(root)
