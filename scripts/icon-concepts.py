@@ -128,8 +128,40 @@ large_copy = '''<g filter="url(#soft)">
 <rect x="454" y="214" width="236" height="74" rx="24" fill="none" stroke="white" stroke-opacity=".40" stroke-width="2"/>
 <path d="M506 252H638" stroke="#68758a" stroke-opacity=".55" stroke-width="9" stroke-linecap="round"/>
 </g>'''
-icon("04-dual-glass", "Dual Glass: larger brighter clipboard, straight rear copy, blue background", "true-blue",
-     lighting + large_copy)
+icon("12-large-study", "Previous larger frosted glass study", "true-blue", lighting + large_copy)
+defs = defs.replace("</defs>", '''
+  <linearGradient id="optical-glass" x1="0" y1="0" x2=".85" y2="1"><stop stop-color="white" stop-opacity=".34"/><stop offset=".36" stop-color="white" stop-opacity=".10"/><stop offset=".66" stop-color="white" stop-opacity=".06"/><stop offset="1" stop-color="white" stop-opacity=".25"/></linearGradient>
+  <linearGradient id="glass-edge" x1="0" y1="0" x2=".7" y2="1"><stop stop-color="#fff"/><stop offset=".25" stop-color="#e8f7ff" stop-opacity=".88"/><stop offset=".50" stop-color="#8bb8f2" stop-opacity=".48"/><stop offset=".78" stop-color="#e1f3ff" stop-opacity=".82"/><stop offset="1" stop-color="#fff" stop-opacity=".95"/></linearGradient>
+  <linearGradient id="softbox" x1="0" y1="0" x2="1" y2="1"><stop stop-color="white" stop-opacity=".30"/><stop offset=".5" stop-color="white" stop-opacity=".08"/><stop offset="1" stop-color="white" stop-opacity="0"/></linearGradient>
+  <linearGradient id="glass-side" x2=".3" y2="1"><stop stop-color="#d5edff" stop-opacity=".20"/><stop offset=".6" stop-color="#28599a" stop-opacity=".35"/><stop offset="1" stop-color="#b4dcff" stop-opacity=".65"/></linearGradient>
+  <clipPath id="front-pane"><rect x="334" y="265" width="460" height="580" rx="68"/></clipPath>
+  <mask id="outside-front"><rect width="1024" height="1024" fill="white"/><rect x="334" y="265" width="460" height="580" rx="68" fill="black"/></mask>
+  <filter id="refraction" x="-10%" y="-10%" width="120%" height="120%"><feGaussianBlur stdDeviation="1.4"/></filter>
+  <filter id="glass-shadow" x="-30%" y="-30%" width="170%" height="170%"><feDropShadow dx="0" dy="12" stdDeviation="10" flood-color="#0c2b58" flood-opacity=".26"/></filter>
+</defs>''')
+optical_copy = '''
+<g mask="url(#outside-front)">
+<rect x="224" y="170" width="460" height="580" rx="68" fill="white" fill-opacity=".085" stroke="url(#glass-edge)" stroke-opacity=".58" stroke-width="4"/>
+<rect x="231" y="177" width="446" height="566" rx="61" fill="none" stroke="white" stroke-opacity=".15" stroke-width="2"/>
+</g>
+<rect x="340" y="273" width="460" height="580" rx="68" fill="url(#glass-side)" filter="url(#glass-shadow)"/>
+<g clip-path="url(#front-pane)">
+<rect x="230" y="175" width="460" height="580" rx="68" fill="white" fill-opacity=".04" stroke="#e1f5ff" stroke-opacity=".5" stroke-width="5" filter="url(#refraction)"/>
+<rect x="334" y="265" width="460" height="580" rx="68" fill="url(#optical-glass)"/>
+<path d="M320 252H768C668 347 638 444 588 545C540 641 443 715 320 766Z" fill="url(#softbox)"/>
+<path d="M368 278H630" stroke="white" stroke-opacity=".36" stroke-width="18" stroke-linecap="round" filter="url(#refraction)"/>
+</g>
+<rect x="334" y="265" width="460" height="580" rx="68" fill="none" stroke="url(#glass-edge)" stroke-width="7"/>
+<rect x="342" y="273" width="444" height="564" rx="60" fill="none" stroke="#effaff" stroke-opacity=".36" stroke-width="2"/>
+<path d="M344 420V337Q344 275 406 275H441" fill="none" stroke="white" stroke-opacity=".86" stroke-width="3" stroke-linecap="round"/>
+<path d="M781 661V774Q781 833 722 833H683" fill="none" stroke="white" stroke-opacity=".65" stroke-width="3" stroke-linecap="round"/>
+<g filter="url(#soft)">
+<rect x="446" y="225" width="236" height="86" rx="31" fill="url(#chrome)" stroke="#f2f6ff" stroke-width="2"/>
+<rect x="455" y="234" width="218" height="68" rx="22" fill="none" stroke="white" stroke-opacity=".38" stroke-width="2"/>
+<path d="M504 269H624" stroke="#68758a" stroke-opacity=".55" stroke-width="8" stroke-linecap="round"/>
+</g>'''
+icon("04-dual-glass", "Dual Glass: slimmer optical glass with beveled edges and a straight rear copy", "true-blue",
+     lighting + optical_copy)
 icon("10-frosted-blue", "Frosted Blue: a brighter glass clipboard with stronger contrast", "quiet-blue",
      lighting + '<g filter="url(#soft)">' + quiet_rear + pane("frosted-glass") + '</g>' + clip)
 icon("11-soft-blue", "Soft Blue: quieter blue pigment and frosted glass", "pale-blue",

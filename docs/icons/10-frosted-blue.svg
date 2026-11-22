@@ -29,6 +29,15 @@
 
   <linearGradient id="true-blue"><stop stop-color="#397ddd"/><stop offset="1" stop-color="#397ddd"/></linearGradient>
   <linearGradient id="bright-glass" x1="0" y1="0" x2=".85" y2="1"><stop stop-color="white" stop-opacity=".78"/><stop offset=".38" stop-color="white" stop-opacity=".43"/><stop offset=".72" stop-color="white" stop-opacity=".36"/><stop offset="1" stop-color="white" stop-opacity=".64"/></linearGradient>
+
+  <linearGradient id="optical-glass" x1="0" y1="0" x2=".85" y2="1"><stop stop-color="white" stop-opacity=".34"/><stop offset=".36" stop-color="white" stop-opacity=".10"/><stop offset=".66" stop-color="white" stop-opacity=".06"/><stop offset="1" stop-color="white" stop-opacity=".25"/></linearGradient>
+  <linearGradient id="glass-edge" x1="0" y1="0" x2=".7" y2="1"><stop stop-color="#fff"/><stop offset=".25" stop-color="#e8f7ff" stop-opacity=".88"/><stop offset=".50" stop-color="#8bb8f2" stop-opacity=".48"/><stop offset=".78" stop-color="#e1f3ff" stop-opacity=".82"/><stop offset="1" stop-color="#fff" stop-opacity=".95"/></linearGradient>
+  <linearGradient id="softbox" x1="0" y1="0" x2="1" y2="1"><stop stop-color="white" stop-opacity=".30"/><stop offset=".5" stop-color="white" stop-opacity=".08"/><stop offset="1" stop-color="white" stop-opacity="0"/></linearGradient>
+  <linearGradient id="glass-side" x2=".3" y2="1"><stop stop-color="#d5edff" stop-opacity=".20"/><stop offset=".6" stop-color="#28599a" stop-opacity=".35"/><stop offset="1" stop-color="#b4dcff" stop-opacity=".65"/></linearGradient>
+  <clipPath id="front-pane"><rect x="334" y="265" width="460" height="580" rx="68"/></clipPath>
+  <mask id="outside-front"><rect width="1024" height="1024" fill="white"/><rect x="334" y="265" width="460" height="580" rx="68" fill="black"/></mask>
+  <filter id="refraction" x="-10%" y="-10%" width="120%" height="120%"><feGaussianBlur stdDeviation="1.4"/></filter>
+  <filter id="glass-shadow" x="-30%" y="-30%" width="170%" height="170%"><feDropShadow dx="0" dy="12" stdDeviation="10" flood-color="#0c2b58" flood-opacity=".26"/></filter>
 </defs>
 <path d="M282 64H742C896 64 960 128 960 282V742C960 896 896 960 742 960H282C128 960 64 896 64 742V282C64 128 128 64 282 64Z" fill="url(#quiet-blue)" filter="url(#tile)"/>
 <path d="M282 64H742C896 64 960 128 960 282V742C960 896 896 960 742 960H282C128 960 64 896 64 742V282C64 128 128 64 282 64Z" transform="translate(4 4) scale(.9921875)" fill="none" stroke="url(#edge)" stroke-width="3"/>
