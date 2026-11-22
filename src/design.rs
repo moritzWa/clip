@@ -10,8 +10,8 @@ pub const HEIGHT: f64 = 475.0;
 pub const RADIUS: f64 = 26.0;
 pub const HEADER: f64 = 58.0;
 pub const FOOTER: f64 = 52.0;
-pub const ROW: f64 = 38.0;
-pub const LIST_WIDTH: f64 = 280.0;
+pub const ROW: f64 = 30.0;
+pub const LIST_WIDTH: f64 = 360.0;
 
 define_class!(
     #[unsafe(super(NSView))]
@@ -114,7 +114,7 @@ define_class!(
             NSColor::labelColor().colorWithAlphaComponent(0.085).setFill();
             let b = self.bounds();
             let path = NSBezierPath::bezierPathWithRoundedRect_xRadius_yRadius(
-                rect(0.0, 0.0, b.size.width, b.size.height), 12.0, 12.0,
+                rect(0.0, 0.0, b.size.width, b.size.height), 10.0, 10.0,
             );
             path.fill();
         }
@@ -136,14 +136,14 @@ pub fn cell(
     mtm: MainThreadMarker,
 ) -> Retained<NSView> {
     let view = NSView::initWithFrame(NSView::alloc(mtm), rect(0.0, 0.0, LIST_WIDTH - 16.0, ROW));
-    let tile = NSView::initWithFrame(NSView::alloc(mtm), rect(8.0, 8.0, 22.0, 22.0));
+    let tile = NSView::initWithFrame(NSView::alloc(mtm), rect(6.0, 5.0, 20.0, 20.0));
     // Icon tiles sit well inside each row, not at the outer panel's corners.
     rounded(
         &tile,
-        6.0,
+        5.0,
         &NSColor::labelColor().colorWithAlphaComponent(0.07),
     );
-    let icon = NSImageView::initWithFrame(NSImageView::alloc(mtm), rect(3.0, 3.0, 16.0, 16.0));
+    let icon = NSImageView::initWithFrame(NSImageView::alloc(mtm), rect(2.0, 2.0, 16.0, 16.0));
     let name = match kind {
         "image" => "photo",
         "file" => "doc",
@@ -151,7 +151,7 @@ pub fn cell(
         _ => "doc.text",
     };
     if let Some(thumbnail) = thumbnail {
-        icon.setFrame(rect(0.0, 0.0, 22.0, 22.0));
+        icon.setFrame(rect(0.0, 0.0, 20.0, 20.0));
         icon.setImageScaling(NSImageScaling::ScaleProportionallyUpOrDown);
         icon.setImage(Some(thumbnail));
     } else {
@@ -160,14 +160,14 @@ pub fn cell(
     }
     tile.addSubview(&icon);
     view.addSubview(&tile);
-    let text = label(&title.replace('\n', " "), 15.0, mtm);
-    text.setFrame(rect(42.0, 9.0, LIST_WIDTH - 92.0, 21.0));
+    let text = label(&title.replace('\n', " "), 13.0, mtm);
+    text.setFrame(rect(34.0, 6.0, LIST_WIDTH - 76.0, 18.0));
     text.setAutoresizingMask(NSAutoresizingMaskOptions::ViewWidthSizable);
     view.addSubview(&text);
     if marked {
         let check = NSImageView::initWithFrame(
             NSImageView::alloc(mtm),
-            rect(LIST_WIDTH - 42.0, 10.0, 18.0, 18.0),
+            rect(LIST_WIDTH - 38.0, 7.0, 16.0, 16.0),
         );
         check.setImage(symbol("checkmark.circle.fill").as_deref());
         check.setContentTintColor(Some(&NSColor::controlAccentColor()));
@@ -182,8 +182,9 @@ mod tests {
     #[test]
     fn spotlight_geometry_leaves_space_for_content() {
         assert_eq!((WIDTH, HEIGHT), (750.0, 475.0));
-        assert!(HEIGHT - HEADER - FOOTER > ROW * 8.0);
-        assert!(WIDTH - LIST_WIDTH - 32.0 > 400.0);
+        assert!(HEIGHT - HEADER - FOOTER - 30.0 > ROW * 11.0);
+        assert!((LIST_WIDTH - WIDTH / 2.0).abs() <= 15.0);
+        assert!(WIDTH - LIST_WIDTH - 32.0 > 350.0);
         // Footer capsules have height 35 and a matching 17.5pt radius.
         assert_eq!(35.0 / 2.0, 17.5);
     }

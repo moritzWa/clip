@@ -44,6 +44,10 @@ muted. No private clipboard database was moved into the VM.
 - A database regression test puts an image file behind 220 text entries and
   checks that Images finds it both with and without a query. This covers type
   filtering before the result limit rather than filtering only a cached page.
+- Compact-list geometry tests cover 30pt rows and a divider at 360pt in the
+  750pt panel, retaining at least 11 visible rows and a preview wider than 350pt.
+  Titles use 13pt text. A fresh VM visual check was unavailable because the
+  desktop-testing VM was no longer registered.
 - Cmd+, opened the native Settings window from the focused history panel.
   A recorded Cmd+Shift+K binding took effect immediately and appeared after a
   process restart. Duplicate history/image bindings were rejected without a
