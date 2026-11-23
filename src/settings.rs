@@ -6,13 +6,16 @@ use crate::{
 use objc2::runtime::NSObjectProtocol;
 use objc2::{DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send, rc::Retained};
 use objc2_app_kit::*;
-use objc2_foundation::{NSNotification, NSPoint, NSRect, NSSize, NSString, ns_string};
+use objc2_foundation::{
+    NSNotification, NSPoint, NSRect, NSSize, NSString, NSUserDefaults, ns_string,
+};
 use std::{
     cell::{Cell, RefCell},
     rc::Rc,
 };
 
 pub struct Ivars {
+    menu_item: Retained<NSStatusItem>,
     service: Rc<RefCell<Service>>,
     recording: Cell<Option<usize>>,
     buttons: RefCell<Vec<Retained<NSButton>>>,
@@ -31,6 +34,12 @@ define_class!(
         fn resigned(&self,_:&NSNotification) {self.cancel_recording();}
     }
     impl SettingsWindow {
+        #[unsafe(method(toggleMenuBarIcon:))]
+        fn toggle_menu_bar_icon(&self, button: &NSButton) {
+            let visible = button.state() == NSControlStateValueOn;
+            NSUserDefaults::standardUserDefaults().setBool_forKey(visible, ns_string!("ShowMenuBarIcon"));
+            self.ivars().menu_item.setVisible(visible);
+        }
         #[unsafe(method(recordHistory:))]
         fn record_history(&self,_:&NSButton) {self.start_recording(0);}
         #[unsafe(method(recordImages:))]
@@ -59,34 +68,39 @@ fn label(text: &str, size: f64, frame: NSRect, mtm: MainThreadMarker) -> Retaine
 }
 
 impl SettingsWindow {
-    pub fn new(mtm: MainThreadMarker, service: Rc<RefCell<Service>>) -> Retained<Self> {
+    pub fn new(
+        mtm: MainThreadMarker,
+        service: Rc<RefCell<Service>>,
+        menu_item: Retained<NSStatusItem>,
+    ) -> Retained<Self> {
         let window = Self::alloc(mtm).set_ivars(Ivars {
+            menu_item,
             service,
             recording: Cell::new(None),
             buttons: RefCell::new(Vec::new()),
             status: RefCell::new(None),
         });
         let window: Retained<Self> = unsafe {
-            msg_send![super(window),initWithContentRect:rect(0.,0.,540.,330.),styleMask:NSWindowStyleMask::Titled|NSWindowStyleMask::Closable,backing:NSBackingStoreType::Buffered,defer:false]
+            msg_send![super(window),initWithContentRect:rect(0.,0.,540.,380.),styleMask:NSWindowStyleMask::Titled|NSWindowStyleMask::Closable,backing:NSBackingStoreType::Buffered,defer:false]
         };
         unsafe {
             window.setReleasedWhenClosed(false);
         }
         window.setTitle(ns_string!("Clipglass Settings"));
         window.setDelegate(Some(objc2::runtime::ProtocolObject::from_ref(&*window)));
-        let content = NSView::initWithFrame(NSView::alloc(mtm), rect(0., 0., 540., 330.));
+        let content = NSView::initWithFrame(NSView::alloc(mtm), rect(0., 0., 540., 380.));
         content.addSubview(&label(
             "Keyboard shortcuts",
             21.,
-            rect(28., 273., 484., 30.),
+            rect(28., 323., 484., 30.),
             mtm,
         ));
         for (index, (title, selector, y)) in [
-            ("Open clipboard history", objc2::sel!(recordHistory:), 219.),
+            ("Open clipboard history", objc2::sel!(recordHistory:), 269.),
             (
                 "Open images / toggle filter",
                 objc2::sel!(recordImages:),
-                171.,
+                221.,
             ),
         ]
         .into_iter()
@@ -113,7 +127,7 @@ impl SettingsWindow {
         let help = label(
             "Click a shortcut, then press a new combination. Esc cancels.",
             12.,
-            rect(28., 126., 484., 20.),
+            rect(28., 176., 484., 20.),
             mtm,
         );
         help.setTextColor(Some(&NSColor::secondaryLabelColor()));
@@ -121,11 +135,27 @@ impl SettingsWindow {
         let hint = label(
             "Keyboard remappers may translate the combination shown here.",
             11.,
-            rect(28., 105., 484., 18.),
+            rect(28., 155., 484., 18.),
             mtm,
         );
         hint.setTextColor(Some(&NSColor::secondaryLabelColor()));
         content.addSubview(&hint);
+        let menu_toggle = unsafe {
+            NSButton::buttonWithTitle_target_action(
+                ns_string!("Show menu-bar icon"),
+                Some(&window),
+                Some(objc2::sel!(toggleMenuBarIcon:)),
+                mtm,
+            )
+        };
+        menu_toggle.setButtonType(NSButtonType::Switch);
+        menu_toggle.setState(if menu_bar_icon_visible() {
+            NSControlStateValueOn
+        } else {
+            NSControlStateValueOff
+        });
+        menu_toggle.setFrame(rect(28., 115., 260., 24.));
+        content.addSubview(&menu_toggle);
         let status = label("", 12., rect(28., 59., 484., 39.), mtm);
         content.addSubview(&status);
         *window.ivars().status.borrow_mut() = Some(status);
@@ -252,6 +282,12 @@ impl SettingsWindow {
         }
         true
     }
+}
+
+pub fn menu_bar_icon_visible() -> bool {
+    let defaults = NSUserDefaults::standardUserDefaults();
+    let key = ns_string!("ShowMenuBarIcon");
+    defaults.objectForKey(key).is_none() || defaults.boolForKey(key)
 }
 
 pub fn event_modifiers(event: &NSEvent) -> u8 {

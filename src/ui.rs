@@ -822,8 +822,16 @@ impl ClipPanel {
         }
         let existing = self.ivars().settings.borrow().clone();
         let settings = existing.unwrap_or_else(|| {
-            let window =
-                crate::settings::SettingsWindow::new(self.mtm(), self.ivars().shortcuts.clone());
+            let window = crate::settings::SettingsWindow::new(
+                self.mtm(),
+                self.ivars().shortcuts.clone(),
+                self.ivars()
+                    .status_item
+                    .borrow()
+                    .as_ref()
+                    .expect("menu-bar item initialized")
+                    .clone(),
+            );
             *self.ivars().settings.borrow_mut() = Some(window.clone());
             window
         });
@@ -1655,6 +1663,8 @@ pub fn run() {
         );
     }
     status.setMenu(Some(&status_menu));
+    status.setVisible(crate::settings::menu_bar_icon_visible());
+    eprintln!("clip: menu-bar icon visible: {}", status.isVisible());
     *panel.ivars().status_item.borrow_mut() = Some(status);
     if let Some(error) = shortcuts.borrow().issue.as_ref() {
         eprintln!("clip: {error}");

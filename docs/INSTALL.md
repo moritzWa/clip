@@ -52,6 +52,9 @@ Use the clipboard icon in the menu bar → **Settings…**, or **⌘,** while Cl
 is focused, to record your own shortcuts. Changes take effect without restarting.
 Escape cancels recording; **Restore Defaults** applies the fresh-install defaults.
 Shortcuts are saved in `~/Library/Application Support/Clip/shortcuts.conf`.
+**Show menu-bar icon** in Settings controls whether the menu-bar icon appears.
+It takes effect immediately and persists across restarts. When hidden, open
+history with its shortcut, then press **⌘,** to return to Settings.
 Keyboard remappers still run first, so the recorder displays the combination
 received by Clipglass rather than the physical chord before remapping.
 

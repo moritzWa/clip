@@ -54,6 +54,9 @@ or Control. Changes apply immediately and persist across restarts. Escape
 cancels recording. Duplicate or unavailable shortcuts are rejected without
 replacing the previous bindings. **Restore Defaults** applies the defaults above.
 
+Turn off **Show menu-bar icon** in Settings to hide the icon immediately and
+across restarts. Your global shortcuts and focused-app **⌘,** still work.
+
 Existing installations keep their previous shortcuts: the internal
 Command+Shift+physical W chord and Cmd+period. Keyboard-layout remappers still
 apply. Settings shows the combination that actually reaches the app.
