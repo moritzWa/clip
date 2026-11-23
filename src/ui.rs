@@ -387,6 +387,9 @@ impl ClipPanel {
             table.setDelegate(Some(ProtocolObject::from_ref(self)));
         }
         let list_scroll = design::scroll(&table, mtm);
+        // Keep selection marks unobstructed. Wheel/trackpad and keyboard
+        // scrolling work without a visible scroller.
+        list_scroll.setHasVerticalScroller(false);
         content.addSubview(&list_scroll);
 
         let text = NSTextView::initWithFrame(

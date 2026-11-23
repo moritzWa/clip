@@ -170,6 +170,7 @@ pub fn cell(
             rect(LIST_WIDTH - 38.0, 7.0, 16.0, 16.0),
         );
         check.setImage(symbol("checkmark.circle.fill").as_deref());
+        check.setAutoresizingMask(NSAutoresizingMaskOptions::ViewMinXMargin);
         check.setContentTintColor(Some(&NSColor::controlAccentColor()));
         view.addSubview(&check);
     }
