@@ -1,6 +1,6 @@
-# Clipglass: privates Launch-Paket
+# Clipglass: Launch-Paket
 
-**Status: Entwurf. Repo und Post bleiben bis zur ausdrücklichen Freigabe unveröffentlicht.**
+**Status: Quellcode-Veröffentlichung am 23. November 2026 ausdrücklich freigegeben. Post und Lizenz bleiben Entwürfe.**
 
 ## Zur Prüfung
 
@@ -18,7 +18,7 @@ Zugangsdaten gehören nicht in das Launch-Paket.
 
 ## Vor der Veröffentlichung
 
-- Repo-Name und öffentliche URL bestätigen. Aktuell: privates `moritzWa/clip`.
+- Öffentliche Quellcode-URL: https://github.com/moritzWa/clip.
 - README, Installationsanleitung, Demo und Post freigeben.
 - MIT-Lizenz bestätigen oder andere Lizenz wählen. Der Vorschlag ist noch nicht aktiviert.
 - Festlegen, ob zunächst nur der Quellcode veröffentlicht wird. Es wurde kein
@@ -30,8 +30,7 @@ Zugangsdaten gehören nicht in das Launch-Paket.
   und einen letzten Audit des freizugebenden Standes durchführen.
 - Erst danach die ausdrücklich genehmigten GitHub-/Post-Aktionen ausführen.
 
-Es wurden weder Sichtbarkeit noch Repo-Name geändert. Es wurde kein Post
-veröffentlicht oder eingeplant.
+Der Repo-Name bleibt unverändert. Es wurde kein Post veröffentlicht oder eingeplant.
 
 Die Demo ist 36 Sekunden lang und hat keine Audiospur. Sie zeigt OCR-Suche,
 Bild-Zoom, Code-Vorschau und Mehrfach-Paste in der echten App. Alle 20 Unit-Tests

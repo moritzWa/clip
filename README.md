@@ -4,8 +4,6 @@
 
 A keyboard-first clipboard history for macOS, built in Rust with native AppKit views. No webview, account, or cloud service.
 
-<!-- Launch draft: repository and media stay private until explicit approval. -->
-
 ![Clipglass clipboard history with screenshot thumbnails](docs/media/clipglass-history.png)
 
 [Watch the short demo](docs/media/clipglass-demo.mp4). Every clip in the demo is synthetic.
@@ -32,7 +30,7 @@ cargo build --locked
 sh scripts/install.sh "$PWD/target/debug/clip"
 ```
 
-The repository is private during launch preparation, so cloning currently requires access.
+The source repository is public. No packaged release is available yet.
 
 The installer creates `/Applications/Clipglass.app` and a per-user launch agent. It requires write access to `/Applications`. The app starts hidden, starts at login, and restarts after an exit. Storage and bundle identifiers retain `Clip` for compatibility; an older `~/Applications/Clip.app` is preserved as a backup.
 
@@ -112,4 +110,4 @@ GUI checks use synthetic history in an isolated macOS VM. Do not copy personal c
 
 ## License
 
-A proposed MIT license is included in the [private launch packet](docs/launch/LICENSE-MIT.proposed.txt). It is a proposal for approval, not an announcement that this private repository has been released under that license.
+A proposed MIT license is included in the [launch packet](docs/launch/LICENSE-MIT.proposed.txt). It has not been adopted; public visibility alone does not grant a software license.

@@ -21,7 +21,7 @@ python3 --version
 
 ## Build and install
 
-During preparation, this GitHub repository is private and requires access. These commands build a development binary, not a release binary:
+The GitHub repository is public. These commands build a development binary, not a release binary:
 
 ```sh
 git clone https://github.com/moritzWa/clip.git clipglass
