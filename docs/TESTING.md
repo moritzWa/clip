@@ -10,6 +10,12 @@ The suite covers whitespace preservation, readable list titles for old imports,
 deduplication, transaction rollback, OCR indexing, safe FTS queries, copy-order
 selection, and zoom geometry. The 100,000-entry benchmark is ignored by default.
 
+Native capture regressions use unique pasteboards, never the general clipboard.
+Two consecutive plain-text `file://` URLs must both be captured unchanged,
+including percent escapes, without repeat captures on polling. The test failed
+before the fix. A native file copy with a duplicate text URL must still produce
+only the native file representation, not an extra text entry.
+
 ## Native checks
 
 Native UI checks ran in an isolated macOS 26 VM with synthetic history and audio

@@ -82,7 +82,12 @@ impl Capture {
         if !self.text_done {
             if let Some(text) = pb.stringForType(&NSString::from_str("public.utf8-plain-text")) {
                 let text = text.to_string();
-                if !text.is_empty() && !text.starts_with("file://") {
+                // Browser address bars copy local URLs as plain text, not as
+                // native files. Suppress the duplicate URL only when the
+                // pasteboard actually advertises a native file representation.
+                let native_file_url =
+                    text.starts_with("file://") && types.iter().any(|t| t == "public.file-url");
+                if !text.is_empty() && !native_file_url {
                     self.text_done = true;
                     payload.text = Some(text);
                 }
@@ -132,6 +137,59 @@ impl Capture {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use objc2_foundation::NSArray;
+
+    #[test]
+    fn consecutive_local_file_urls_copied_as_text_are_captured() {
+        // A unique native pasteboard reproduces Chrome's address-bar copy
+        // without reading or changing the user's general clipboard.
+        let pb = NSPasteboard::pasteboardWithUniqueName();
+        let text_type = NSString::from_str("public.utf8-plain-text");
+        let mut capture = Capture::new(pb.changeCount());
+        for url in [
+            "file:///synthetic/articles/first%20article.html",
+            "file:///synthetic/articles/second-article.html",
+        ] {
+            unsafe {
+                pb.declareTypes_owner(&NSArray::from_retained_slice(&[text_type.clone()]), None);
+            }
+            assert!(pb.setString_forType(&NSString::from_str(url), &text_type));
+            assert!(capture.begin(pb.changeCount(), Some("Synthetic browser".into())));
+            let payload = capture.read(&pb);
+            assert_eq!(payload.text.as_deref(), Some(url));
+            assert!(payload.file_url.is_none());
+            assert!(capture.begin(pb.changeCount(), None));
+            assert!(
+                capture.read(&pb).text.is_none(),
+                "do not capture the same URL twice"
+            );
+        }
+        pb.clearContents();
+    }
+
+    #[test]
+    fn native_file_copy_does_not_duplicate_its_url_as_text() {
+        let pb = NSPasteboard::pasteboardWithUniqueName();
+        let text_type = NSString::from_str("public.utf8-plain-text");
+        let file_type = NSString::from_str("public.file-url");
+        let url = NSString::from_str("file:///synthetic/example.txt");
+        unsafe {
+            pb.declareTypes_owner(
+                &NSArray::from_retained_slice(&[text_type.clone(), file_type.clone()]),
+                None,
+            );
+        }
+        assert!(pb.setString_forType(&url, &text_type));
+        assert!(pb.setString_forType(&url, &file_type));
+        let mut capture = Capture::new(pb.changeCount() - 1);
+        for _ in 0..SETTLE_ATTEMPTS {
+            assert!(capture.begin(pb.changeCount(), None));
+            let payload = capture.read(&pb);
+            assert!(payload.text.is_none());
+        }
+        assert!(capture.file_done);
+        pb.clearContents();
+    }
 
     #[test]
     fn promised_images_are_retried_after_text_without_recapturing_text() {
