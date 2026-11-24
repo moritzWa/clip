@@ -66,6 +66,7 @@ struct Ivars {
     preview_kind: Cell<u8>,
     meta: RefCell<Option<Retained<NSTextField>>>,
     list_scroll: RefCell<Option<Retained<NSScrollView>>>,
+    fade_state: Cell<(i32, i32)>,
     text_scroll: RefCell<Option<Retained<NSScrollView>>>,
     capture: RefCell<crate::clipboard::Capture>,
     ignore_change: Cell<isize>,
@@ -187,6 +188,7 @@ define_class!(
             self.poll_query();
             self.poll_ocr();
             self.poll_thumbnails();
+            self.update_list_fade();
             if self.ivars().previewing.get() {
                 if let (Some(zoom), Some(label)) = (self.ivars().image_zoom.borrow().as_ref(), self.ivars().zoom_status.borrow().as_ref()) {
                     label.setStringValue(&NSString::from_str(&format!("{:.0}%", zoom.magnification() * 100.0)));
@@ -248,6 +250,7 @@ impl ClipPanel {
             preview_kind: Cell::new(0),
             meta: RefCell::new(None),
             list_scroll: RefCell::new(None),
+            fade_state: Cell::new((-1, -1)),
             text_scroll: RefCell::new(None),
             capture: RefCell::new(crate::clipboard::Capture::new(0)),
             ignore_change: Cell::new(-1),
@@ -566,7 +569,7 @@ impl ClipPanel {
                 NSPoint::new(8.0, design::FOOTER),
                 NSSize::new(list_w - 16.0, body_h),
             ));
-            design::fade_bottom(list, NSSize::new(list_w - 16.0, body_h), 36.0);
+            self.ivars().fade_state.set((-1, -1));
         }
         let preview_x = list_w + pad;
         let preview_w = (w - preview_x - pad).max(40.0);
@@ -1115,6 +1118,32 @@ impl ClipPanel {
                 );
             }
         }
+    }
+
+    // The list dissolves at an edge only while more rows lie beyond it.
+    fn update_list_fade(&self) {
+        const FADE: f64 = 36.0;
+        let list = self.ivars().list_scroll.borrow();
+        let Some(list) = list.as_ref() else {
+            return;
+        };
+        if list.isHidden() {
+            return;
+        }
+        let clip = list.contentView();
+        let visible = clip.bounds();
+        let Some(document) = list.documentView() else {
+            return;
+        };
+        let content_h = document.frame().size.height;
+        let top = visible.origin.y.clamp(0.0, FADE);
+        let bottom = (content_h - visible.origin.y - visible.size.height).clamp(0.0, FADE);
+        let state = (top.round() as i32, bottom.round() as i32);
+        if state == self.ivars().fade_state.get() {
+            return;
+        }
+        self.ivars().fade_state.set(state);
+        design::edge_fade(list, list.frame().size, top, bottom);
     }
 
     fn paste_selected(&self) {
