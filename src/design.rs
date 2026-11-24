@@ -86,6 +86,36 @@ pub fn rounded(view: &NSView, radius: f64, color: &NSColor) {
     }
 }
 
+// Fades the bottom edge of a scroll view to show there is more to scroll to.
+pub fn fade_bottom(view: &NSView, size: NSSize, fade: f64) {
+    use objc2::runtime::AnyObject;
+    use objc2_foundation::{NSArray, NSNumber};
+    use objc2_quartz_core::CAGradientLayer;
+    view.setWantsLayer(true);
+    let Some(layer) = view.layer() else {
+        return;
+    };
+    let mask = CAGradientLayer::new();
+    mask.setFrame(rect(0.0, 0.0, size.width, size.height));
+    let clear = NSColor::clearColor().CGColor();
+    let opaque = NSColor::blackColor().CGColor();
+    let as_object = |c: &Retained<objc2_core_graphics::CGColor>| unsafe {
+        &*(Retained::as_ptr(c) as *const AnyObject)
+    };
+    let colors = NSArray::from_slice(&[as_object(&clear), as_object(&opaque), as_object(&opaque)]);
+    let edge = (fade / size.height.max(fade)).clamp(0.0, 1.0);
+    let locations = NSArray::from_retained_slice(&[
+        NSNumber::new_f64(0.0),
+        NSNumber::new_f64(edge),
+        NSNumber::new_f64(1.0),
+    ]);
+    unsafe { mask.setColors(Some(&colors)) };
+    mask.setLocations(Some(&locations));
+    mask.setStartPoint(NSPoint::new(0.5, 0.0));
+    mask.setEndPoint(NSPoint::new(0.5, 1.0));
+    unsafe { layer.setMask(Some(&mask)) };
+}
+
 pub fn scroll(view: &NSView, mtm: MainThreadMarker) -> Retained<NSScrollView> {
     let scroll = NSScrollView::initWithFrame(NSScrollView::alloc(mtm), rect(0.0, 0.0, 10.0, 10.0));
     scroll.setHasVerticalScroller(true);

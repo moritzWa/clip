@@ -566,6 +566,7 @@ impl ClipPanel {
                 NSPoint::new(8.0, design::FOOTER),
                 NSSize::new(list_w - 16.0, body_h),
             ));
+            design::fade_bottom(list, NSSize::new(list_w - 16.0, body_h), 36.0);
         }
         let preview_x = list_w + pad;
         let preview_w = (w - preview_x - pad).max(40.0);
