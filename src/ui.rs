@@ -46,7 +46,6 @@ struct Ivars {
     glass: RefCell<Option<Retained<NSGlassEffectView>>>,
     back: RefCell<Option<Retained<NSButton>>>,
     filter: RefCell<Option<Retained<NSPopUpButton>>>,
-    section: RefCell<Option<Retained<NSTextField>>>,
     divider: RefCell<Option<Retained<NSView>>>,
     info: RefCell<
         Vec<(
@@ -55,7 +54,6 @@ struct Ivars {
             Retained<NSTextField>,
         )>,
     >,
-    footer_left: RefCell<Option<Retained<NSGlassEffectView>>>,
     footer_right: RefCell<Option<Retained<NSGlassEffectView>>>,
     paste_button: RefCell<Option<Retained<NSButton>>>,
     filter_index: Cell<isize>,
@@ -241,10 +239,8 @@ impl ClipPanel {
             glass: RefCell::new(None),
             back: RefCell::new(None),
             filter: RefCell::new(None),
-            section: RefCell::new(None),
             divider: RefCell::new(None),
             info: RefCell::new(Vec::new()),
-            footer_left: RefCell::new(None),
             footer_right: RefCell::new(None),
             paste_button: RefCell::new(None),
             filter_index: Cell::new(0),
@@ -357,9 +353,6 @@ impl ClipPanel {
             filter.setAction(Some(objc2::sel!(filterChanged:)));
         }
         content.addSubview(&filter);
-        let section = design::label("Recent", 12.0, mtm);
-        section.setTextColor(Some(&objc2_app_kit::NSColor::secondaryLabelColor()));
-        content.addSubview(&section);
         let divider = NSView::initWithFrame(NSView::alloc(mtm), rect(0.0, 0.0, 0.5, 10.0));
         design::rounded(
             &divider,
@@ -488,16 +481,6 @@ impl ClipPanel {
             info.push((row, key, value));
         }
         *self.ivars().info.borrow_mut() = info;
-        let footer_left = design::glass(rect(0.0, 0.0, 126.0, 35.0), 17.5, mtm);
-        let left_content = NSView::initWithFrame(NSView::alloc(mtm), rect(0.0, 0.0, 126.0, 35.0));
-        let icon = NSImageView::initWithFrame(NSImageView::alloc(mtm), rect(12.0, 8.0, 19.0, 19.0));
-        icon.setImage(design::symbol("doc.on.clipboard").as_deref());
-        left_content.addSubview(&icon);
-        let name = design::label("Clipboard", 13.0, mtm);
-        name.setFrame(rect(40.0, 9.0, 78.0, 18.0));
-        left_content.addSubview(&name);
-        footer_left.setContentView(Some(&left_content));
-        content.addSubview(&footer_left);
         let footer_right = design::glass(rect(0.0, 0.0, 242.0, 35.0), 17.5, mtm);
         let paste_button =
             NSButton::initWithFrame(NSButton::alloc(mtm), rect(0.0, 0.0, 242.0, 35.0));
@@ -512,9 +495,7 @@ impl ClipPanel {
         content.addSubview(&footer_right);
         *self.ivars().back.borrow_mut() = Some(back);
         *self.ivars().filter.borrow_mut() = Some(filter);
-        *self.ivars().section.borrow_mut() = Some(section);
         *self.ivars().divider.borrow_mut() = Some(divider);
-        *self.ivars().footer_left.borrow_mut() = Some(footer_left);
         *self.ivars().footer_right.borrow_mut() = Some(footer_right);
         *self.ivars().paste_button.borrow_mut() = Some(paste_button);
 
@@ -562,9 +543,6 @@ impl ClipPanel {
         if let Some(filter) = self.ivars().filter.borrow().as_ref() {
             filter.setHidden(expanded);
         }
-        if let Some(section) = self.ivars().section.borrow().as_ref() {
-            section.setHidden(expanded);
-        }
         if let Some(list) = self.ivars().list_scroll.borrow().as_ref() {
             list.setHidden(expanded);
         }
@@ -592,9 +570,6 @@ impl ClipPanel {
         if let Some(filter) = self.ivars().filter.borrow().as_ref() {
             filter.setFrame(rect(w - 130.0, h - 43.0, 114.0, 28.0));
         }
-        if let Some(section) = self.ivars().section.borrow().as_ref() {
-            section.setFrame(rect(20.0, h - design::HEADER - 22.0, list_w - 40.0, 18.0));
-        }
         if let Some(divider) = self.ivars().divider.borrow().as_ref() {
             divider.setFrame(rect(
                 list_w,
@@ -603,16 +578,13 @@ impl ClipPanel {
                 h - design::HEADER - design::FOOTER,
             ));
         }
-        if let Some(footer) = self.ivars().footer_left.borrow().as_ref() {
-            footer.setFrame(rect(12.0, 9.0, 126.0, 35.0));
-        }
         if let Some(footer) = self.ivars().footer_right.borrow().as_ref() {
             footer.setFrame(rect(w - 254.0, 9.0, 242.0, 35.0));
         }
         if let Some(search) = self.ivars().search.borrow().as_ref() {
             search.setFrame(rect(48.0, h - 44.0, w - 188.0, 28.0));
         }
-        let body_top = h - design::HEADER - 30.0;
+        let body_top = h - design::HEADER - 8.0;
         let body_h = body_top - design::FOOTER;
         if let Some(list) = self.ivars().list_scroll.borrow().as_ref() {
             list.setFrame(NSRect::new(
@@ -870,13 +842,6 @@ impl ClipPanel {
             self.ivars().store.borrow().search(&text, 80)
         };
         *self.ivars().rows.borrow_mut() = hits;
-        if let Some(section) = self.ivars().section.borrow().as_ref() {
-            section.setStringValue(if text.trim().is_empty() {
-                ns_string!("Recent")
-            } else {
-                ns_string!("Results")
-            });
-        }
         if let Some(table) = self.ivars().table.borrow().as_ref() {
             table.reloadData();
         }
@@ -1194,19 +1159,6 @@ impl ClipPanel {
 
     fn update_selection_ui(&self) {
         let count = self.ivars().marked.borrow().len();
-        if let Some(section) = self.ivars().section.borrow().as_ref() {
-            let name = if self.ivars().query.borrow().trim().is_empty() {
-                "Recent"
-            } else {
-                "Results"
-            };
-            let label = if count == 0 {
-                format!("{name} · X to select")
-            } else {
-                format!("{name} · {count} selected")
-            };
-            section.setStringValue(&NSString::from_str(&label));
-        }
         if let Some(button) = self.ivars().paste_button.borrow().as_ref() {
             let name = NSRunningApplication::runningApplicationWithProcessIdentifier(
                 self.ivars().prev_pid.get(),

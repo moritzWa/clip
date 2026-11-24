@@ -379,6 +379,7 @@ impl Store {
         result.is_ok() && tx.commit().is_ok()
     }
 
+    #[cfg(test)]
     pub fn insert_image(&mut self, bytes: &[u8], ext: &str, source: Option<&str>) -> bool {
         self.insert_image_with_file(bytes, ext, None, source)
     }
