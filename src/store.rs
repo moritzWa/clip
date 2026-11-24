@@ -380,6 +380,18 @@ impl Store {
     }
 
     pub fn insert_image(&mut self, bytes: &[u8], ext: &str, source: Option<&str>) -> bool {
+        self.insert_image_with_file(bytes, ext, None, source)
+    }
+
+    // A copy that carries both image data and a file URL (screenshot tools)
+    // becomes one entry holding both parts, not an image entry plus a file entry.
+    pub fn insert_image_with_file(
+        &mut self,
+        bytes: &[u8],
+        ext: &str,
+        file: Option<&Path>,
+        source: Option<&str>,
+    ) -> bool {
         if bytes.is_empty() || bytes.len() > 40_000_000 {
             return false;
         }
@@ -397,20 +409,36 @@ impl Store {
         if std::fs::write(&path, bytes).is_err() {
             return false;
         }
-        let title = name.clone();
+        let file = file.filter(|f| f.exists());
+        let title = file
+            .and_then(|f| f.file_name())
+            .and_then(|s| s.to_str())
+            .map(str::to_string)
+            .unwrap_or_else(|| name.clone());
+        let categories = if file.is_some() {
+            "[\"image\",\"file\"]"
+        } else {
+            "[\"image\"]"
+        };
         let Ok(tx) = self.conn.transaction() else {
             return false;
         };
         let result = (|| -> rusqlite::Result<()> {
             tx.execute(
                 "INSERT INTO entries (id, created_at, updated_at, title, categories, source_name, source_path, copy_count, content_hash)
-                 VALUES (?1, ?2, ?2, ?3, '[\"image\"]', ?4, '', 1, ?5)",
-                params![id, now, title, source.unwrap_or(""), hash],
+                 VALUES (?1, ?2, ?2, ?3, ?6, ?4, '', 1, ?5)",
+                params![id, now, title, source.unwrap_or(""), hash, categories],
             )?;
             tx.execute(
                 "INSERT INTO parts (id, entry_id, kind, mime, text, file_path) VALUES (?1, ?2, 'image', ?3, '', ?4)",
                 params![format!("{id}:i"), id, format!("image/{ext}"), path.display().to_string()],
             )?;
+            if let Some(file) = file {
+                tx.execute(
+                    "INSERT INTO parts (id, entry_id, kind, mime, text, file_path) VALUES (?1, ?2, 'file', '', '', ?3)",
+                    params![format!("{id}:f"), id, file.display().to_string()],
+                )?;
+            }
             refresh_search_entry(&tx, &id)?;
             Ok(())
         })();
@@ -711,6 +739,27 @@ mod tests {
             fixture.store.preview(&hits[0].id).unwrap().text,
             "https://example.com/path"
         );
+    }
+
+    #[test]
+    fn image_copied_with_its_file_is_one_entry_with_both_parts() {
+        let mut fixture = Fixture::new();
+        let file = fixture.store.files.join("2026-01-01_00-00-00.png");
+        std::fs::write(&file, b"synthetic file").unwrap();
+        assert!(fixture
+            .store
+            .insert_image_with_file(b"synthetic image", "png", Some(&file), None));
+        let hits = fixture.store.recent(10);
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].title, "2026-01-01_00-00-00.png");
+        let preview = fixture.store.preview(&hits[0].id).unwrap();
+        assert!(preview.image_path.is_some());
+        assert_eq!(preview.file_path.as_deref(), Some(file.as_path()));
+        assert_eq!(preview.kind, "image");
+        assert!(!fixture
+            .store
+            .insert_image_with_file(b"synthetic image", "png", Some(&file), None));
+        assert_eq!(fixture.store.recent(10).len(), 1);
     }
 
     #[test]

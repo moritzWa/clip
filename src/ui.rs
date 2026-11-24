@@ -1018,7 +1018,8 @@ impl ClipPanel {
         for (row, _, _) in self.ivars().info.borrow().iter() {
             row.setHidden(false);
         }
-        let is_document = preview.file_path.as_ref().is_some_and(|p| p.exists())
+        let is_document = preview.image_path.is_none()
+            && preview.file_path.as_ref().is_some_and(|p| p.exists())
             && self.ivars().document.borrow().is_some();
         self.ivars().preview_kind.set(if is_document {
             2
@@ -1289,6 +1290,12 @@ impl ClipPanel {
                 if !pb.setData_forType(Some(&data), data_type) {
                     return false;
                 }
+                if let Some(file) = preview.file_path.as_ref().filter(|p| p.exists()) {
+                    let url = NSURL::fileURLWithPath(&NSString::from_str(&file.to_string_lossy()));
+                    if let Some(url_string) = url.absoluteString() {
+                        pb.setString_forType(&url_string, unsafe { NSPasteboardTypeFileURL });
+                    }
+                }
             } else {
                 eprintln!("clip: selected image is unavailable");
                 return false;
@@ -1419,20 +1426,23 @@ impl ClipPanel {
                 .insert_text(&text, source.as_deref());
             captured = true;
         }
+        let file_path = payload
+            .file_url
+            .map(|file| percent_decode(file.trim_start_matches("file://")));
+        let file_path = file_path.as_deref().map(std::path::Path::new);
         if let Some((bytes, ext)) = payload.image {
-            self.ivars()
-                .store
-                .borrow_mut()
-                .insert_image(&bytes, ext, source.as_deref());
+            self.ivars().store.borrow_mut().insert_image_with_file(
+                &bytes,
+                ext,
+                file_path,
+                source.as_deref(),
+            );
             captured = true;
-        }
-        if let Some(file) = payload.file_url {
-            let path = file.trim_start_matches("file://").to_string();
-            let path = percent_decode(&path);
+        } else if let Some(path) = file_path {
             self.ivars()
                 .store
                 .borrow_mut()
-                .insert_file(std::path::Path::new(&path), source.as_deref());
+                .insert_file(path, source.as_deref());
             captured = true;
         }
         if !captured {
