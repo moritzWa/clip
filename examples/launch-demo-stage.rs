@@ -101,6 +101,15 @@ fn main() {
     };
     let w = screen.size.width;
     let h = screen.size.height;
+    // Clean, opaque backdrop for stills of the real app. Do not composite the
+    // app UI: capture the resulting desktop pixels so native glass stays intact.
+    if std::env::var_os("CLIP_DEMO_BACKDROP_ONLY").is_some() {
+        window.setContentView(Some(&stage));
+        window.makeKeyAndOrderFront(None);
+        app.activateIgnoringOtherApps(true);
+        app.run();
+        return;
+    }
     let title = label("Clipglass", 34.0, rect(48.0, h - 72.0, w - 96.0, 42.0), mtm);
     stage.addSubview(&title);
     let subtitle = label(

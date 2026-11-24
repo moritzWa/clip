@@ -1,5 +1,19 @@
 # Synthetic demo
 
+## Current screenshots
+
+The history, OCR-search, code, batch-selection and image-preview stills were
+recaptured on 2026-11-24 from the current native app in an isolated macOS 26 VM.
+They show the compact rows, centered divider, tighter header and list-edge fades.
+All 16 history entries and the screenshot fixture were generated for capture.
+No personal history, documents or URLs were imported.
+
+`CLIP_DEMO_BACKDROP_ONLY=1` starts `launch-demo-stage` with only its opaque
+backdrop. The stills are crops of desktop pixels, preserving native glass and
+shadows. `scripts/prepare-demo-media.py` applies the reviewed crop bounds.
+
+## Earlier video
+
 The [36-second video](../media/clipglass-demo.mp4) records the real native app
 inside a disposable macOS VM. It has no audio track. It shows:
 

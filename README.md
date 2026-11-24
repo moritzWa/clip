@@ -6,7 +6,8 @@ A keyboard-first clipboard history for macOS, built in Rust with native AppKit v
 
 ![Clipglass clipboard history with screenshot thumbnails](docs/media/clipglass-history.png)
 
-[Watch the short demo](docs/media/clipglass-demo.mp4). Every clip in the demo is synthetic.
+[Watch the earlier short demo](docs/media/clipglass-demo.mp4). The screenshots show
+the current interface; the video shows an earlier build. All content is synthetic.
 
 ## What it does
 
@@ -16,6 +17,16 @@ A keyboard-first clipboard history for macOS, built in Rust with native AppKit v
 - Opens larger previews with Right Arrow. Pinch to zoom, scroll to pan, or use the Fit and zoom buttons.
 - Marks clips with X and pastes them in copy order, oldest first.
 - Keeps indentation and blank lines when pasting. Only list titles drop leading whitespace.
+
+## Screenshots
+
+| Search text inside screenshots | Preview code without losing indentation |
+| --- | --- |
+| ![OCR search finds a release code inside a screenshot](docs/media/clipglass-ocr-search.png) | ![Code preview with its original indentation](docs/media/clipglass-code.png) |
+
+| Mark several clips for batch paste | Open a larger image preview |
+| --- | --- |
+| ![Three selected clips with unobstructed checkmarks](docs/media/clipglass-batch.png) | ![Expanded image preview with zoom controls](docs/media/clipglass-image-zoom.png) |
 
 ## Install from source
 
