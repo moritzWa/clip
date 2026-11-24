@@ -54,8 +54,6 @@ struct Ivars {
             Retained<NSTextField>,
         )>,
     >,
-    footer_right: RefCell<Option<Retained<NSGlassEffectView>>>,
-    paste_button: RefCell<Option<Retained<NSButton>>>,
     filter_index: Cell<isize>,
     table: RefCell<Option<Retained<NSTableView>>>,
     text: RefCell<Option<Retained<NSTextView>>>,
@@ -166,9 +164,6 @@ define_class!(
         #[unsafe(method(canBecomeMainWindow))]
         fn can_become_main(&self) -> bool { true }
 
-        #[unsafe(method(pasteSelected:))]
-        fn paste_action(&self, _: &AnyObject) { self.paste_selected(); }
-
         #[unsafe(method(hidePanel:))]
         fn hide_action(&self, _: &AnyObject) {
             if self.ivars().previewing.get() { self.focus_search(); } else { self.hide_panel(); }
@@ -241,8 +236,6 @@ impl ClipPanel {
             filter: RefCell::new(None),
             divider: RefCell::new(None),
             info: RefCell::new(Vec::new()),
-            footer_right: RefCell::new(None),
-            paste_button: RefCell::new(None),
             filter_index: Cell::new(0),
             table: RefCell::new(None),
             text: RefCell::new(None),
@@ -481,23 +474,9 @@ impl ClipPanel {
             info.push((row, key, value));
         }
         *self.ivars().info.borrow_mut() = info;
-        let footer_right = design::glass(rect(0.0, 0.0, 242.0, 35.0), 17.5, mtm);
-        let paste_button =
-            NSButton::initWithFrame(NSButton::alloc(mtm), rect(0.0, 0.0, 242.0, 35.0));
-        paste_button.setBordered(false);
-        paste_button.setTitle(ns_string!("Paste to previous app    ↩"));
-        paste_button.setFont(Some(&objc2_app_kit::NSFont::systemFontOfSize(13.0)));
-        unsafe {
-            paste_button.setTarget(Some(self));
-            paste_button.setAction(Some(objc2::sel!(pasteSelected:)));
-        }
-        footer_right.setContentView(Some(&paste_button));
-        content.addSubview(&footer_right);
         *self.ivars().back.borrow_mut() = Some(back);
         *self.ivars().filter.borrow_mut() = Some(filter);
         *self.ivars().divider.borrow_mut() = Some(divider);
-        *self.ivars().footer_right.borrow_mut() = Some(footer_right);
-        *self.ivars().paste_button.borrow_mut() = Some(paste_button);
 
         *self.ivars().search.borrow_mut() = Some(search);
         *self.ivars().table.borrow_mut() = Some(table);
@@ -509,7 +488,6 @@ impl ClipPanel {
         *self.ivars().text_scroll.borrow_mut() = Some(text_scroll);
         self.layout();
         self.select_row(0);
-        self.update_selection_ui();
     }
 
     fn layout(&self) {
@@ -577,9 +555,6 @@ impl ClipPanel {
                 0.5,
                 h - design::HEADER - design::FOOTER,
             ));
-        }
-        if let Some(footer) = self.ivars().footer_right.borrow().as_ref() {
-            footer.setFrame(rect(w - 254.0, 9.0, 242.0, 35.0));
         }
         if let Some(search) = self.ivars().search.borrow().as_ref() {
             search.setFrame(rect(48.0, h - 44.0, w - 188.0, 28.0));
@@ -668,13 +643,6 @@ impl ClipPanel {
             })
         {
             self.ivars().prev_pid.set(app.processIdentifier());
-            if let Some(button) = self.ivars().paste_button.borrow().as_ref() {
-                let name = app
-                    .localizedName()
-                    .map(|s| s.to_string())
-                    .unwrap_or_else(|| "previous app".into());
-                button.setTitle(&NSString::from_str(&format!("Paste to {name}    ↩")));
-            }
         }
         if let Some(screen) = NSScreen::mainScreen(self.mtm()) {
             let vis = screen.visibleFrame();
@@ -697,7 +665,6 @@ impl ClipPanel {
         if let Some(table) = self.ivars().table.borrow().as_ref() {
             self.makeFirstResponder(Some(table));
         }
-        self.update_selection_ui();
     }
 
     fn resize_for_preview(&self, expanded: bool) {
@@ -846,7 +813,6 @@ impl ClipPanel {
             table.reloadData();
         }
         self.select_row(0);
-        self.update_selection_ui();
     }
 
     fn poll_ocr(&self) {
@@ -964,9 +930,6 @@ impl ClipPanel {
             if let Some(meta) = self.ivars().meta.borrow().as_ref() {
                 meta.setHidden(true);
             }
-            if let Some(button) = self.ivars().paste_button.borrow().as_ref() {
-                button.setEnabled(false);
-            }
             self.ivars().preview_kind.set(0);
             self.layout();
             return;
@@ -976,9 +939,6 @@ impl ClipPanel {
         };
         if let Some(meta) = self.ivars().meta.borrow().as_ref() {
             meta.setHidden(false);
-        }
-        if let Some(button) = self.ivars().paste_button.borrow().as_ref() {
-            button.setEnabled(true);
         }
         for (row, _, _) in self.ivars().info.borrow().iter() {
             row.setHidden(false);
@@ -1153,26 +1113,6 @@ impl ClipPanel {
                     false,
                 );
             }
-        }
-        self.update_selection_ui();
-    }
-
-    fn update_selection_ui(&self) {
-        let count = self.ivars().marked.borrow().len();
-        if let Some(button) = self.ivars().paste_button.borrow().as_ref() {
-            let name = NSRunningApplication::runningApplicationWithProcessIdentifier(
-                self.ivars().prev_pid.get(),
-            )
-            .and_then(|app| app.localizedName())
-            .map(|s| s.to_string())
-            .unwrap_or_else(|| "previous app".into());
-            let title = if count == 0 {
-                format!("Paste to {name}    ↩")
-            } else {
-                format!("Paste {count} selected items    ↩")
-            };
-            button.setTitle(&NSString::from_str(&title));
-            button.setEnabled(count > 0 || !self.ivars().rows.borrow().is_empty());
         }
     }
 

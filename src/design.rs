@@ -9,7 +9,7 @@ pub const WIDTH: f64 = 750.0;
 pub const HEIGHT: f64 = 475.0;
 pub const RADIUS: f64 = 26.0;
 pub const HEADER: f64 = 58.0;
-pub const FOOTER: f64 = 52.0;
+pub const FOOTER: f64 = 12.0;
 pub const ROW: f64 = 30.0;
 pub const LIST_WIDTH: f64 = 360.0;
 
@@ -186,8 +186,6 @@ mod tests {
         assert!(HEIGHT - HEADER - FOOTER - 30.0 > ROW * 11.0);
         assert!((LIST_WIDTH - WIDTH / 2.0).abs() <= 15.0);
         assert!(WIDTH - LIST_WIDTH - 32.0 > 350.0);
-        // Footer capsules have height 35 and a matching 17.5pt radius.
-        assert_eq!(35.0 / 2.0, 17.5);
     }
 
     #[test]
@@ -195,7 +193,7 @@ mod tests {
         let frame = expanded_preview_frame(WIDTH, HEIGHT);
         assert_eq!(frame.origin.x, 16.0);
         assert_eq!(frame.size.width, 718.0);
-        assert_eq!(frame.size.height, 349.0);
+        assert_eq!(frame.size.height, 389.0);
         assert!(frame.origin.y > FOOTER);
         assert!(frame.origin.y + frame.size.height < HEIGHT - HEADER);
     }
