@@ -44,7 +44,6 @@ struct Ivars {
     preview_title: RefCell<Option<Retained<NSTextField>>>,
     surface: RefCell<Option<Retained<NSView>>>,
     glass: RefCell<Option<Retained<NSGlassEffectView>>>,
-    back: RefCell<Option<Retained<NSButton>>>,
     filter: RefCell<Option<Retained<NSPopUpButton>>>,
     divider: RefCell<Option<Retained<NSView>>>,
     info: RefCell<
@@ -165,11 +164,6 @@ define_class!(
         #[unsafe(method(canBecomeMainWindow))]
         fn can_become_main(&self) -> bool { true }
 
-        #[unsafe(method(hidePanel:))]
-        fn hide_action(&self, _: &AnyObject) {
-            if self.ivars().previewing.get() { self.focus_search(); } else { self.hide_panel(); }
-        }
-
         #[unsafe(method(filterChanged:))]
         fn filter_changed(&self, sender: &NSPopUpButton) {
             self.ivars().filter_index.set(sender.indexOfSelectedItem());
@@ -234,7 +228,6 @@ impl ClipPanel {
             preview_title: RefCell::new(None),
             surface: RefCell::new(None),
             glass: RefCell::new(None),
-            back: RefCell::new(None),
             filter: RefCell::new(None),
             divider: RefCell::new(None),
             info: RefCell::new(Vec::new()),
@@ -312,15 +305,6 @@ impl ClipPanel {
         self.setContentView(Some(&glass));
         *self.ivars().glass.borrow_mut() = Some(glass);
         *self.ivars().surface.borrow_mut() = Some(content.clone());
-        let back = NSButton::initWithFrame(NSButton::alloc(mtm), rect(0.0, 0.0, 28.0, 28.0));
-        back.setBordered(false);
-        back.setTitle(ns_string!(""));
-        back.setImage(design::symbol("chevron.left").as_deref());
-        unsafe {
-            back.setTarget(Some(self));
-            back.setAction(Some(objc2::sel!(hidePanel:)));
-        }
-        content.addSubview(&back);
         let search =
             NSTextField::initWithFrame(NSTextField::alloc(mtm), rect(0.0, 0.0, 10.0, 10.0));
         search.setPlaceholderString(Some(ns_string!("Type to filter entries…")));
@@ -477,7 +461,6 @@ impl ClipPanel {
             info.push((row, key, value));
         }
         *self.ivars().info.borrow_mut() = info;
-        *self.ivars().back.borrow_mut() = Some(back);
         *self.ivars().filter.borrow_mut() = Some(filter);
         *self.ivars().divider.borrow_mut() = Some(divider);
 
@@ -519,7 +502,7 @@ impl ClipPanel {
         }
         if let Some(title) = self.ivars().preview_title.borrow().as_ref() {
             title.setHidden(!expanded);
-            title.setFrame(rect(48.0, h - 44.0, w - 72.0, 28.0));
+            title.setFrame(rect(16.0, h - 44.0, w - 32.0, 28.0));
         }
         if let Some(filter) = self.ivars().filter.borrow().as_ref() {
             filter.setHidden(expanded);
@@ -545,9 +528,6 @@ impl ClipPanel {
         let pad = 16.0;
         let meta_h = 164.0;
         let list_w = design::LIST_WIDTH;
-        if let Some(back) = self.ivars().back.borrow().as_ref() {
-            back.setFrame(rect(12.0, h - 44.0, 28.0, 28.0));
-        }
         if let Some(filter) = self.ivars().filter.borrow().as_ref() {
             filter.setFrame(rect(w - 130.0, h - 43.0, 114.0, 28.0));
         }
@@ -560,7 +540,7 @@ impl ClipPanel {
             ));
         }
         if let Some(search) = self.ivars().search.borrow().as_ref() {
-            search.setFrame(rect(48.0, h - 44.0, w - 188.0, 28.0));
+            search.setFrame(rect(16.0, h - 44.0, w - 158.0, 28.0));
         }
         let body_top = h - design::HEADER - 8.0;
         let body_h = body_top - design::FOOTER;
