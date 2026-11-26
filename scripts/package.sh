@@ -35,6 +35,10 @@ PY
 # Override explicitly (including '-' for ad-hoc) when choosing another identity.
 identity=${CLIP_SIGN_IDENTITY:-$(security find-identity -v -p codesigning 2>/dev/null | awk '/Developer ID Application:/ {print $2; exit}')}
 identity=${identity:--}
-codesign --force --sign "$identity" "$app"
+if [ "$identity" = "-" ]; then
+    codesign --force --sign - "$app"
+else
+    codesign --force --options runtime --timestamp --sign "$identity" "$app"
+fi
 codesign --verify --strict "$app"
 echo "$app"

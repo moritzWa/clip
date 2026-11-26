@@ -2,6 +2,9 @@
 name = "clip"
 version = "0.1.0"
 edition = "2024"
+license = "MIT"
+description = "Native macOS clipboard history with local search and screenshot OCR"
+repository = "https://github.com/moritzWa/clip"
 
 [dependencies]
 block2 = "0.6.2"

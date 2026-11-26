@@ -1,8 +1,25 @@
 # Installation
 
-Clipglass currently builds from source. No binary release, signed installer, or notarized download has been published.
+## Download the app (recommended)
 
-## Requirements
+Download the [signed, notarized Apple Silicon app](https://github.com/moritzWa/clip/releases/download/v0.1.0/Clipglass-0.1.0-macos-arm64.zip).
+Unzip it, drag Clipglass.app to Applications, and open it. Requires macOS 26+ and
+an M1-or-newer Mac. No developer tools are needed for this route.
+
+The first launch opens history. After that, use **⌘⇧V**, **⌃⌘V** for images,
+or the menu-bar clipboard icon. Shortcut conflicts are shown in Settings (⌘,).
+Enable Accessibility for Clipglass in System Settings to paste automatically.
+Without that grant, Enter copies the selected clip to the clipboard.
+
+To start at login, add the app in System Settings → General → Login Items.
+To update, quit Clipglass, replace the app with the new download, and reopen it.
+This does not delete local clipboard history.
+
+Release archives contain only the app, never clipboard history or fixtures.
+Apple's notarization ticket is stapled to the bundle. SHA256SUMS.txt on each
+release page lets you verify the archive with shasum -a 256 -c SHA256SUMS.txt.
+
+## Source-build requirements
 
 - macOS 26 or later. The UI uses AppKit APIs introduced in macOS 26.
 - An Apple Silicon Mac is the tested platform. Intel builds are unverified.

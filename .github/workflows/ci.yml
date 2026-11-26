@@ -1,0 +1,14 @@
+name: macOS checks
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo test --locked
+      - run: cargo build --locked --release
+      - name: Check bundle creation without signing credentials
+        run: CLIP_SIGN_IDENTITY=- sh scripts/package.sh target/release/clip target/Clipglass.app

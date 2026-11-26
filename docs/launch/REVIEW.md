@@ -1,6 +1,6 @@
 # Clipglass: Launch-Paket
 
-**Status: Quellcode-Veröffentlichung am 23. November 2026 ausdrücklich freigegeben. Post und Lizenz bleiben Entwürfe.**
+**Status: Quellcode öffentlich. MIT-Lizenz und signierte, notarierte Downloads am 26. November 2026 ausdrücklich freigegeben. Nur der Post bleibt Entwurf.**
 
 ## Zur Prüfung
 
@@ -10,29 +10,29 @@
 - [Demo](../media/clipglass-demo.mp4) und Screenshots unter `docs/media/`
 - [Demo-Inhalt und Herkunft der Testdaten](DEMO.md)
 - [Kurzer Post-Entwurf](POST-DRAFT.md)
-- [MIT-Lizenzvorschlag](LICENSE-MIT.proposed.txt)
+- [MIT-Lizenz](../../LICENSE)
+- [Release-Anleitung](../RELEASING.md)
 
 Die Demo verwendet ausschließlich generierte Texte, Links und Bilder in einer
 isolierten macOS-VM. Persönliche History, Raycast-Daten, echte Screenshots und
 Zugangsdaten gehören nicht in das Launch-Paket.
 
-## Vor der Veröffentlichung
+## Veröffentlichung
 
 - Öffentliche Quellcode-URL: https://github.com/moritzWa/clip.
-- README, Installationsanleitung, Demo und Post freigeben.
-- MIT-Lizenz bestätigen oder andere Lizenz wählen. Der Vorschlag ist noch nicht aktiviert.
-- Festlegen, ob zunächst nur der Quellcode veröffentlicht wird. Es wurde kein
-  Release-Build, GitHub Release, signierter Download oder Homebrew-Paket erstellt.
+- [Downloads und Prüfsummen](https://github.com/moritzWa/clip/releases).
+- Lizenz: MIT. Quellcode und Downloads sind für andere Nutzer bestimmt.
+- Die App-Downloads benötigen macOS 26+ und Apple Silicon. Ein Homebrew-Paket
+  und automatische Updates sind nicht enthalten.
 - Die Entwicklungsgrenzen im README beibehalten. Besonders wichtig sind das
   mögliche globale Shortcut-Konflikte, unverschlüsselte History und unvollständige
   Passwortmanager-Ausnahmen.
-- Nach Freigabe die Lizenz an die endgültige Stelle übernehmen, Links anpassen
-  und einen letzten Audit des freizugebenden Standes durchführen.
-- Erst danach die ausdrücklich genehmigten GitHub-/Post-Aktionen ausführen.
+- Vor jedem Release Audit, Signatur, Apple-Notarisierung, angeheftetes Ticket
+  und Gatekeeper-Prüfung durchführen. Die Schritte stehen in RELEASING.md.
 
 Der Repo-Name bleibt unverändert. Es wurde kein Post veröffentlicht oder eingeplant.
 
-Die Demo ist 36 Sekunden lang und hat keine Audiospur. Sie zeigt OCR-Suche,
+Die ältere Demo ist 36 Sekunden lang und hat keine Audiospur. Sie zeigt OCR-Suche,
 Bild-Zoom, Code-Vorschau und Mehrfach-Paste in der echten App. Alle 20 Unit-Tests
 bestanden; ein expliziter Benchmark blieb wie vorgesehen übersprungen. Die
 Demo-Prozesse wurden beendet, die VM gestoppt und ihre Lease freigegeben.

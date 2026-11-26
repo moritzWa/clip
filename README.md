@@ -28,9 +28,28 @@ the current interface; the video shows an earlier build. All content is syntheti
 | --- | --- |
 | ![Three selected clips with unobstructed checkmarks](docs/media/clipglass-batch.png) | ![Expanded image preview with zoom controls](docs/media/clipglass-image-zoom.png) |
 
-## Install from source
+## Download and install
 
-**This is a pre-release development build. There is no signed or notarized download yet.**
+**[Download Clipglass for Apple Silicon](https://github.com/moritzWa/clip/releases/download/v0.1.0/Clipglass-0.1.0-macos-arm64.zip)** · [All releases](https://github.com/moritzWa/clip/releases)
+
+Requires **macOS 26 or later** and an **Apple Silicon Mac** (M1 or newer).
+No Rust, developer tools, account or subscription is needed for the download.
+
+1. Download and unzip the archive.
+2. Drag **Clipglass.app** into **Applications**, then open it.
+3. Press **⌘⇧V** to open history, or use the menu-bar clipboard icon.
+4. Enable **Clipglass** in **System Settings → Privacy & Security → Accessibility**
+   for automatic paste. Without that grant, Enter copies the selected clip instead.
+
+The app is Developer ID signed, notarized by Apple, and includes a stapled
+notarization ticket. Checksums are on the release page. To start it at login,
+add Clipglass in **System Settings → General → Login Items**.
+
+Your history stays on your Mac. It is not encrypted; read the privacy notes below
+before copying sensitive material. The app does not import another clipboard
+manager's history automatically.
+
+## Build from source
 
 You need macOS 26 or later, Xcode Command Line Tools, Rust stable, and Python 3. The current build has been tested on Apple Silicon. Intel support has not been verified.
 
@@ -40,8 +59,6 @@ cd clipglass
 cargo build --locked
 sh scripts/install.sh "$PWD/target/debug/clip"
 ```
-
-The source repository is public. No packaged release is available yet.
 
 The installer creates `/Applications/Clipglass.app` and a per-user launch agent. It requires write access to `/Applications`. The app starts hidden, starts at login, and restarts after an exit. Storage and bundle identifiers retain `Clip` for compatibility; an older `~/Applications/Clip.app` is preserved as a backup.
 
@@ -104,9 +121,8 @@ The app has no application network client, account, sync, or analytics service. 
   image files as well as copied image payloads.
 - Capture, search, and large-file writes can still block the main thread. OCR and thumbnail decoding run off the main thread.
 - Mixed/media batches use a 250 ms gap. The destination must accept each type and process pastes within that interval.
-- An in-app permissions screen, notarization, and
-  published binary downloads are not implemented. Local packaging uses an
-  available Developer ID certificate, with an ad-hoc fallback.
+- An in-app permissions screen and automatic app updates are not implemented.
+  Download a newer release and replace the app to update; local history remains.
 
 ## Development
 
@@ -121,4 +137,4 @@ GUI checks use synthetic history in an isolated macOS VM. Do not copy personal c
 
 ## License
 
-A proposed MIT license is included in the [launch packet](docs/launch/LICENSE-MIT.proposed.txt). It has not been adopted; public visibility alone does not grant a software license.
+[MIT](LICENSE). Contributions are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md).

@@ -1630,7 +1630,7 @@ pub fn run() {
         std::mem::forget(_timer);
     }
 
-    if std::env::args().any(|arg| arg == "--show") {
+    if !existing_install || std::env::args().any(|arg| arg == "--show") {
         panel.show_panel();
     }
     app.run();
