@@ -10,6 +10,8 @@ fi
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 cp "$root/assets/Clipglass.icns" "$app/Contents/Resources/Clipglass.icns"
+cp "$root/LICENSE" "$app/Contents/Resources/LICENSE"
+python3 "$root/scripts/third-party-licenses.py" "$app/Contents/Resources/ThirdPartyLicenses"
 cp "$binary" "$app/Contents/MacOS/clip"
 chmod 755 "$app/Contents/MacOS/clip"
 python3 - "$app/Contents/Info.plist" <<'PY'

@@ -8,6 +8,7 @@ and drag the app into Applications. No shell installer or developer tools are ne
 
 - A clean checkout of the version to publish, with checks passing.
 - Xcode Command Line Tools and Rust stable.
+- Rust's rust-docs component, for the standard library's redistribution notices.
 - A Developer ID Application signing certificate and its private key in Keychain.
 - A validated notarytool Keychain profile. Create one interactively with
   xcrun notarytool store-credentials. Never commit credentials or put passwords in scripts.
@@ -27,6 +28,8 @@ SHA256SUMS.txt. Existing release output is never overwritten.
 Output is under target/distribution/0.1.0/. The staging notarize.zip and
 notarization.json are not public assets. Publish only Clipglass-0.1.0-macos-arm64.zip
 and SHA256SUMS.txt. The app contains no runtime state, clipboard data or fixtures.
+Its Resources directory includes the MIT license, dependency notices and Rust
+standard-library notices.
 
 ## Publish
 

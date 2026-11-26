@@ -57,6 +57,7 @@ You need macOS 26 or later, Xcode Command Line Tools, Rust stable, and Python 3.
 git clone https://github.com/moritzWa/clip.git clipglass
 cd clipglass
 cargo build --locked
+rustup component add rust-docs
 sh scripts/install.sh "$PWD/target/debug/clip"
 ```
 

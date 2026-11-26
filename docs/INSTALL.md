@@ -44,6 +44,7 @@ The GitHub repository is public. These commands build a development binary, not 
 git clone https://github.com/moritzWa/clip.git clipglass
 cd clipglass
 cargo build --locked
+rustup component add rust-docs
 sh scripts/install.sh "$PWD/target/debug/clip"
 ```
 
