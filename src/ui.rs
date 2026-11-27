@@ -63,6 +63,7 @@ struct Ivars {
     zoom_status: RefCell<Option<Retained<NSTextField>>>,
     document: RefCell<Option<Retained<QLPreviewView>>>,
     preview_kind: Cell<u8>,
+    video: RefCell<Option<Retained<crate::video::VideoPreview>>>,
     meta: RefCell<Option<Retained<NSTextField>>>,
     list_scroll: RefCell<Option<Retained<NSScrollView>>>,
     fade_state: Cell<(i32, i32)>,
@@ -183,6 +184,9 @@ define_class!(
             self.poll_ocr();
             self.poll_thumbnails();
             self.update_list_fade();
+            if self.isVisible() {
+                if let Some(video) = self.ivars().video.borrow().as_ref() { video.update(); }
+            }
             if self.ivars().previewing.get() {
                 if let (Some(zoom), Some(label)) = (self.ivars().image_zoom.borrow().as_ref(), self.ivars().zoom_status.borrow().as_ref()) {
                     label.setStringValue(&NSString::from_str(&format!("{:.0}%", zoom.magnification() * 100.0)));
@@ -241,6 +245,7 @@ impl ClipPanel {
             zoom_status: RefCell::new(None),
             document: RefCell::new(None),
             preview_kind: Cell::new(0),
+            video: RefCell::new(None),
             meta: RefCell::new(None),
             list_scroll: RefCell::new(None),
             fade_state: Cell::new((-1, -1)),
@@ -469,6 +474,9 @@ impl ClipPanel {
         *self.ivars().text.borrow_mut() = Some(text);
         *self.ivars().image.borrow_mut() = Some(image);
         *self.ivars().document.borrow_mut() = document;
+        let video = crate::video::VideoPreview::new(mtm);
+        content.addSubview(&video);
+        *self.ivars().video.borrow_mut() = Some(video);
         *self.ivars().meta.borrow_mut() = Some(meta);
         *self.ivars().list_scroll.borrow_mut() = Some(list_scroll);
         *self.ivars().text_scroll.borrow_mut() = Some(text_scroll);
@@ -521,7 +529,7 @@ impl ClipPanel {
         }
         if let Some(text) = self.ivars().text_scroll.borrow().as_ref() {
             text.setHidden(
-                self.ivars().preview_kind.get() == 2
+                matches!(self.ivars().preview_kind.get(), 2 | 3)
                     || (expanded && self.ivars().preview_kind.get() == 1),
             );
         }
@@ -596,6 +604,13 @@ impl ClipPanel {
                 NSSize::new(preview_w, preview_h),
             ));
         }
+        if let Some(video) = self.ivars().video.borrow().as_ref() {
+            video.setHidden(self.ivars().preview_kind.get() != 3);
+            let frame = if expanded { design::expanded_preview_frame(w, h) } else {
+                rect(preview_x, design::FOOTER + meta_h + 6.0, preview_w, preview_h)
+            };
+            video.layout_video(frame, expanded);
+        }
         if expanded {
             let frame = design::expanded_preview_frame(w, h);
             if let Some(image) = self.ivars().image.borrow().as_ref() {
@@ -644,6 +659,9 @@ impl ClipPanel {
         }
         self.layout();
         self.makeKeyAndOrderFront(None);
+        if self.ivars().preview_kind.get() == 3 {
+            if let Some(video) = self.ivars().video.borrow().as_ref() { video.play(); }
+        }
         self.refresh_thumbnail_rows();
         NSApplication::sharedApplication(self.mtm()).activateIgnoringOtherApps(true);
         if let Some(table) = self.ivars().table.borrow().as_ref() {
@@ -673,6 +691,7 @@ impl ClipPanel {
 
     fn hide_panel(&self) {
         self.orderOut(None);
+        if let Some(video) = self.ivars().video.borrow().as_ref() { video.pause(); }
         // End field editing before resetting, so its editor cannot restore a
         // stale query on the next open. Preview navigation never comes here.
         self.makeFirstResponder(None);
@@ -893,6 +912,7 @@ impl ClipPanel {
             .get(row as usize)
             .map(|h| h.id.clone());
         let Some(id) = id else {
+            if let Some(video) = self.ivars().video.borrow().as_ref() { video.load(None, false); }
             if let Some(text) = self.ivars().text.borrow().as_ref() {
                 text.setString(ns_string!("No matching entries"));
             }
@@ -927,10 +947,16 @@ impl ClipPanel {
         for (row, _, _) in self.ivars().info.borrow().iter() {
             row.setHidden(false);
         }
-        let is_document = preview.image_path.is_none()
+        let is_video = preview.file_path.as_ref().is_some_and(|p| p.exists() && crate::video::is_video(p));
+        if let Some(video) = self.ivars().video.borrow().as_ref() {
+            video.load(preview.file_path.as_deref().filter(|_| is_video), self.isVisible());
+        }
+        let is_document = !is_video && preview.image_path.is_none()
             && preview.file_path.as_ref().is_some_and(|p| p.exists())
             && self.ivars().document.borrow().is_some();
-        self.ivars().preview_kind.set(if is_document {
+        self.ivars().preview_kind.set(if is_video {
+            3
+        } else if is_document {
             2
         } else if preview.image_path.is_some() {
             1
@@ -947,7 +973,7 @@ impl ClipPanel {
             document.setHidden(!is_document);
         }
         if let Some(scroll) = self.ivars().text_scroll.borrow().as_ref() {
-            scroll.setHidden(is_document);
+            scroll.setHidden(is_document || is_video);
         }
         self.layout();
         if let Some(text) = self.ivars().text.borrow().as_ref() {
@@ -955,7 +981,7 @@ impl ClipPanel {
         }
         if let Some(image) = self.ivars().image.borrow().as_ref() {
             let path = preview.image_path.clone().or(preview.file_path.clone());
-            if let Some(path) = path.filter(|_| !is_document) {
+            if let Some(path) = path.filter(|_| !is_document && !is_video) {
                 if preview.image_path.is_some() {
                     image.setImage(
                         NSImage::initWithContentsOfFile(
@@ -1029,7 +1055,7 @@ impl ClipPanel {
         }
         self.resize_for_preview(true);
         self.layout();
-        if self.ivars().preview_kind.get() == 1 {
+        if matches!(self.ivars().preview_kind.get(), 1 | 3) {
             self.makeFirstResponder(None);
             return;
         }
@@ -1384,6 +1410,12 @@ impl ClipPanel {
                     return false;
                 }
             }
+        }
+        if plain && event.keyCode() == 49 && self.ivars().previewing.get() && self.ivars().preview_kind.get() == 3 {
+            if !event.isARepeat() {
+                if let Some(video) = self.ivars().video.borrow().as_ref() { video.toggle(); }
+            }
+            return true;
         }
         match event.keyCode() {
             53 => {

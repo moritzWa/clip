@@ -15,6 +15,7 @@ the current interface; the video shows an earlier build. All content is syntheti
 - Searches text, links, and text recognized inside screenshots with Apple Vision.
 - Shows screenshot thumbnails, including screenshots copied as image files, selectable text, and native Quick Look document previews.
 - Opens larger previews with Right Arrow. Pinch to zoom, scroll to pan, or use the Fit and zoom buttons.
+- Autoplays local videos muted. In the larger preview, click Play/Pause or press Space, and click or drag the timeline dot to seek.
 - Marks clips with X and pastes them in copy order, oldest first.
 - Keeps indentation and blank lines when pasting. Only list titles drop leading whitespace.
 
@@ -34,6 +35,8 @@ the current interface; the video shows an earlier build. All content is syntheti
 
 Requires **macOS 26 or later** and an **Apple Silicon Mac** (M1 or newer).
 No Rust, developer tools, account or subscription is needed for the download.
+The v0.1.0 download predates the video playback controls described above.
+Build from source to use those controls until the next release.
 
 1. Download and unzip the archive.
 2. Drag **Clipglass.app** into **Applications**, then open it.
@@ -94,6 +97,7 @@ apply. Settings shows the combination that actually reaches the app.
 | ↑ / ↓ | Browse results |
 | X while browsing | Mark or unmark a clip |
 | → | Open a larger preview |
+| Space in a larger video preview | Play or pause |
 | ← | Return to search |
 | Enter | Paste the current clip, or all marked clips |
 | Escape | Leave the preview, clear marks, or hide the panel |

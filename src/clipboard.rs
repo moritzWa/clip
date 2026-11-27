@@ -138,9 +138,13 @@ impl Capture {
 mod tests {
     use super::*;
     use objc2_foundation::NSArray;
+    // AppKit pasteboard creation can alias during concurrent calls in one process.
+    // Keep native pasteboard tests isolated from one another as well as the user.
+    static PASTEBOARD_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
     #[test]
     fn consecutive_local_file_urls_copied_as_text_are_captured() {
+        let _guard = PASTEBOARD_LOCK.lock().unwrap();
         // A unique native pasteboard reproduces Chrome's address-bar copy
         // without reading or changing the user's general clipboard.
         let pb = NSPasteboard::pasteboardWithUniqueName();
@@ -169,6 +173,7 @@ mod tests {
 
     #[test]
     fn native_file_copy_does_not_duplicate_its_url_as_text() {
+        let _guard = PASTEBOARD_LOCK.lock().unwrap();
         let pb = NSPasteboard::pasteboardWithUniqueName();
         let text_type = NSString::from_str("public.utf8-plain-text");
         let file_type = NSString::from_str("public.file-url");

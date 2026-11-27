@@ -8,9 +8,12 @@ cargo test --locked
 
 The suite covers whitespace preservation, readable list titles for old imports,
 deduplication, transaction rollback, OCR indexing, safe FTS queries, copy-order
-selection, and zoom geometry. The 100,000-entry benchmark is ignored by default.
+selection, zoom geometry, video-file detection, and scrubber bounds. The
+100,000-entry benchmark is ignored by default.
 
 Native capture regressions use unique pasteboards, never the general clipboard.
+The native pasteboard tests share a lock to prevent concurrent AppKit calls
+from mixing their synthetic payloads.
 Two consecutive plain-text `file://` URLs must both be captured unchanged,
 including percent escapes, without repeat captures on polling. The test failed
 before the fix. A native file copy with a duplicate text URL must still produce
@@ -23,6 +26,15 @@ muted. No private clipboard database was moved into the VM.
 
 - Vision recognized text in a generated image and search found it.
 - Quick Look rendered a text document with autoplay disabled.
+- Local MP4 video autoplayed muted in the compact preview. Right Arrow kept
+  the playback position in the larger view. Space and the play/pause button
+  toggled playback, and clicking or dragging the timeline changed position.
+  The real mouse drag left the panel in place, rather than moving its window.
+  Left/Escape returned to the compact view without clearing the query.
+- The VM-only `video-preview-qa` example exercised the production video view
+  with a generated 20-second MP4: autoplay, expansion continuity, play/pause,
+  click seek, paused seek, drag seek, resuming after a playing scrub, seek
+  bounds, replay after the end, and unloading the player.
 - Image previews enlarged, zoomed, panned, and returned to the compact list.
 - Synthetic magnification events exercised the production pinch handler, zoom
   limits, Fit reset, and smart zoom. Physical trackpad hardware was not exercised.
@@ -63,9 +75,12 @@ muted. No private clipboard database was moved into the VM.
   Settings. Migration retained the earlier Cmd+Shift+physical W and Cmd+period
   bindings before any explicit change.
 
-The `image-zoom-qa`, `paste-receiver-qa`, and `thumbnail-qa` examples are for VM-only
+The `image-zoom-qa`, `video-preview-qa`, `paste-receiver-qa`, and `thumbnail-qa` examples are for VM-only
 checks. They require `CLIP_VM_TEST=1`. The fixture seeder refuses to seed the
 current user's actual home directory.
+
+[Full video preview with its timeline](media/clipglass-video.png), captured with
+a generated test pattern and no personal data.
 
 ## Storage-query measurements
 

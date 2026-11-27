@@ -9,6 +9,7 @@ mod shortcuts;
 mod store;
 mod thumbnails;
 mod ui;
+mod video;
 
 fn main() {
     // launchd retains stderr, including panics. Never log clipboard content.
